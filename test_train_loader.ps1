@@ -1,0 +1,1 @@
+python ./test_train_loader.py --eval --model ResNetSE34V2 --log_input True --encoder_type ASP --n_mels 64 --trainfunc softmaxproto --save_path exps/test --eval_frames 400  --initial_model baseline_v2_ap.model --test_path data/voxceleb1_test

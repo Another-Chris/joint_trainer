@@ -1,4 +1,3 @@
-experiment_name: RawNet3_SSL
 model: RawNet3
 encoder_type: ECA
 nOut: 256
@@ -11,9 +10,3 @@ trainfunc: subConLoss
 lr_decay: 0.75
 weight_decay: 5e-05
 augment: True
-save_path: ./save/RawNet3_SSL
-train_path: ./data/cnceleb/data
-train_list: ./data/train_list_cnceleb.txt
-test_path: data/cnceleb/eval
-test_list: data/test_list_cnceleb.txt
-initial_model: RawNet3.pt 

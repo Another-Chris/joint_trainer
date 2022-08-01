@@ -51,59 +51,35 @@ class ModelWithHead(nn.Module):
         return feat
 
 
-class SpeakerNet(nn.Module):
-    def __init__(
-        self,
-        model: str,
-        trainfunc: str,
-        nPerSpeaker,
-        **kwargs
-    ):
-        super(SpeakerNet, self).__init__()
-
-        SpeakerNetModel = importlib.import_module(
-            'models.' + model).__getattribute__('MainModel')
-
-        encoder = SpeakerNetModel(**kwargs)
-        SpeakerNetModel = ModelWithHead(encoder, 512)
-
-        self.__S__ = SpeakerNetModel
-
-        LossFunction = importlib.import_module(
-            'loss.' + trainfunc).__getattribute__('LossFunction')
-        self.__L__ = LossFunction(**kwargs)
-
-        self.nPerSpeaker = nPerSpeaker
-
-    def forward(self, data, label=None):
-        data = data.reshape(-1, data.size()[-1]).cuda()
-        outp = self.__S__.forward(data)
-
-        if label == None:
-            return outp
-        else:
-            bsz = outp.size()[0] // 2
-            f1, f2 = torch.split(outp, [bsz, bsz], dim=0)
-            outp = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-            nloss = self.__L__.forward(outp)
-            return nloss
-
-
 # driver class, define the optimizer and scheduler
 # this states how the model should be trained
 class ModelTrainer(object):
-    def __init__(self, speaker_model, optimizer, scheduler, **kwargs):
-        self.__model__ = speaker_model
+    def __init__(self, model, optimizer, scheduler, trainfunc, nPerSpeaker, **kwargs):
+        
+        
+        model_fn = importlib.import_module(
+            'models.' + model).__getattribute__('MainModel')
+        
+        encoder = model_fn(**kwargs)                 # embeddings
+        self.__model__ = ModelWithHead(encoder, 512) # training
+        
 
         Optimizer = importlib.import_module(
             'optimizer.' + optimizer).__getattribute__('Optimizer')
         self.__optimizer__ = Optimizer(self.__model__.parameters(), **kwargs)
+        
 
         Scheduler = importlib.import_module(
             'scheduler.' + scheduler).__getattribute__('Scheduler')
         self.__scheduler__, self.lr_step = Scheduler(
             self.__optimizer__, **kwargs)
 
+
+        LossFunction = importlib.import_module(
+            'loss.' + trainfunc).__getattribute__('LossFunction')
+        self.__L__ = LossFunction(**kwargs)
+        
+        self.nPerSpeaker = nPerSpeaker
 
         assert self.lr_step in ['epoch', 'iteration']
 
@@ -120,12 +96,24 @@ class ModelTrainer(object):
 
             # forward pass
             data = torch.cat([data[0], data[1]], dim=0)
-
+            
+            # batch, 1, len
+            # 1, batch len
+            # batch * 1, len
             data = data.transpose(1, 0)
-            nloss = self.__model__(data, 'placeholder')
+            data = data.reshape(-1, data.size()[-1]).cuda()
+            outp = self.__model__.forward(data)
+
+            bsz = outp.size()[0] // 2
+            f1, f2 = torch.split(outp, [bsz, bsz], dim=0)
+            outp = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+            nloss = self.__L__.forward(outp)
+
+            # backward pass
             nloss.backward()
             self.__optimizer__.step()
 
+            # record
             loss += nloss.detach().cpu().item()
             counter += 1
 
@@ -179,7 +167,7 @@ class ModelTrainer(object):
             inp1 = data[0][0].cuda()
 
             with torch.no_grad():
-                ref_feat = self.__model__.__S__.encoder(inp1).detach().cpu()
+                ref_feat = self.__model__.encoder(inp1).detach().cpu()
                 
                 mean_feat = torch.mean(ref_feat, dim = 0)
                 label = re.findall(r'(id\d+)',data[1][0])[0]
@@ -208,7 +196,7 @@ class ModelTrainer(object):
             ref_feat = feats[data[1]].cuda()
             com_feat = feats[data[2]].cuda()
 
-            if self.__model__.__L__.test_normalize:
+            if self.__L__.test_normalize:
                 ref_feat = F.normalize(ref_feat, p=2, dim=1)
                 com_feat = F.normalize(com_feat, p=2, dim=1)
 
@@ -233,30 +221,28 @@ class ModelTrainer(object):
         # self.__model__.load_state_dict(loaded_state)
         # loaded_state = torch.load(path, map_location="cuda:%d" % self.gpu)
 
-        self_state = self.__model__.__S__.encoder.state_dict()
-        
-
+        self_state = self.__model__.encoder.state_dict()
         
         loaded_state = torch.load(path, map_location="cuda:0")
+        
         
         if 'model' in loaded_state:
             loaded_state = loaded_state['model']
         
-
-        # if len(loaded_state.keys()) == 1 and "model" in loaded_state:
-        #     loaded_state = loaded_state["model"]
-        #     newdict = {}
-        #     delete_list = []
-        #     for name, param in loaded_state.items():
-        #         new_name = "__S__."+name
-        #         newdict[new_name] = param
-        #         delete_list.append(name)
-        #     loaded_state.update(newdict)
-        #     for name in delete_list:
-        #         del loaded_state[name]
+        if '__S__' in list(loaded_state.keys())[0]:
+            newdict = {}
+            delete_list = []
+            
+            for name, param in loaded_state.items():
+                new_name = name.replace('__S__.', '')
+                newdict[new_name] = param
+                delete_list.append(name)
                 
-                    
+            loaded_state.update(newdict)
+            for name in delete_list:
+                del loaded_state[name]   
                 
+                            
         for name, param in loaded_state.items():
             origname = name
             if name not in self_state:

@@ -49,8 +49,7 @@ def main_worker(args):
     writer = SummaryWriter(logdir)
 
     # load models
-    s = SpeakerNet(**vars(args))
-    trainer = ModelTrainer(s, **vars(args))
+    trainer = ModelTrainer(**vars(args))
 
     it = 1
 
@@ -86,7 +85,7 @@ def main_worker(args):
     # evaluation code
     # this is a separate command, not during training.
     if args.eval == True:
-        pytorch_total_params = sum(p.numel() for p in s.__S__.parameters())
+        pytorch_total_params = sum(p.numel() for p in trainer.__model__.parameters())
 
         print('total params: ', pytorch_total_params)
         print('Test list: ', args.test_list)

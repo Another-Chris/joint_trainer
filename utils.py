@@ -147,10 +147,6 @@ def get_args():
     parser.add_argument('--eval', dest='eval',
                         action='store_true', help='Eval only')
 
-    # distributed and mixed precision training
-    parser.add_argument('--mixedprec', dest='mixedprec',
-                        action='store_true', help='Enable mixed precision training')
-
     parser.add_argument('--experiment_name', type=str,
                         help='experiment name', dest='experiment_name')
 

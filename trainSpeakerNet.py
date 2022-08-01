@@ -15,14 +15,8 @@ from tuneThreshold import *
 from utils import get_args
 from torch.utils.tensorboard import SummaryWriter
 
-
 args = get_args()
 logdir = f'./logs/{args.experiment_name}'
-if os.path.exists(logdir):
-    shutil.rmtree(logdir)
-
-writer = SummaryWriter(logdir)
-
 
 def evaluate(trainer):
     sc, lab, _ = trainer.evaluateFromList(**vars(args))
@@ -52,6 +46,7 @@ def save_scripts():
 
 
 def main_worker(args):
+    writer = SummaryWriter(logdir)
 
     # load models
     s = SpeakerNet(**vars(args))
@@ -61,15 +56,14 @@ def main_worker(args):
 
     # initialize trainer and data loader
     train_dataset = train_dataset_loader(**vars(args))
-    train_sampler = train_dataset_sampler(train_dataset, **vars(args))
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         num_workers=args.nDataLoaderThread,
-        sampler=train_sampler,
         pin_memory=False,
         worker_init_fn=worker_init_fn,
-        drop_last=False
+        drop_last=False,
+        shuffle=True
     )
 
     # load model weights
@@ -107,36 +101,34 @@ def main_worker(args):
     # core training script
     for it in range(it, args.max_epoch + 1):
         print(f'epoch {it}')
-        train_sampler.set_epoch(it)
 
         clr = [x['lr'] for x in trainer.__optimizer__.param_groups]
 
-        # train_network: iterate through all the data        
-        loss, traineer = trainer.train_network(train_loader)
+        # train_network: iterate through all the data
+        loss = trainer.train_network(train_loader)
         writer.add_scalar('Loss/Train', loss, it)
-        print('Epoch {:d}, TEER/TAcc {:2.2f}, TLOSS {:f}, LR {:f}'.format(it,
-              traineer, loss, max(clr)))
-
+        print(f'Epoch {it}, TLOSS {loss :.2f}, LR {max(clr):.2f}')
+        
         if it % args.test_interval == 0:
             eer, mindcf = evaluate(trainer)
 
-            print('\n', 'Epoch {:d}, VEER {:2.4f}, MinDCF: {:2.5f}'.format(
-                it, eer, mindcf))
+            print(f'\n Epoch {it}, VEER {eer:.4f}, MinDCF: {mindcf:.5f}')
 
-            trainer.saveParameters(
-                args.model_save_path + "/model%09d.model" % it)
-
-            with open(args.model_save_path + '/model%09d.eer' % it, 'w') as eerfile:
-                eerfile.write('{:2.4f}'.format(eer))
-
-            writer.add_scalar('Loss/Train', eer, it)
-
+            mpath = f'{args.model_save_path}/model-{it}.model'
+            trainer.saveParameters(mpath)
+        
+            save_scripts()
+            writer.add_scalar('EER/Eval', eer, it)
+            
 
 def main():
+    if os.path.exists(logdir):
+        shutil.rmtree(logdir)
+
     args.model_save_path = args.save_path + "/model"
     args.result_save_path = args.save_path + "/result"
-    args.feat_save_path = ""
-
+    args.feat_save_path = args.save_path + '/feature'
+    
     # exps/modelname/model
     os.makedirs(args.model_save_path, exist_ok=True)
     os.makedirs(args.result_save_path, exist_ok=True)

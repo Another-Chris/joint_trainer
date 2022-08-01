@@ -7,7 +7,7 @@ import soundfile as sf
 import torch
 
 from scipy import signal as ss
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 
 
 def round_down(num, divisor): return num - (num % divisor)
@@ -146,37 +146,6 @@ class train_dataset_loader(TrainLoader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def __getitem__(self, indices):
-        feat = []
-
-        for index in indices:
-            audio = load_wav(
-                self.data_list[index], self.max_frames, evalmode=False)
-
-            # 5 numbers, so 80% chance the wav will be augmented
-            # and ONLY ONE AUGMENTATION at one time
-            if self.augment:
-                augtype = random.randint(0, 4)
-                if augtype == 1:
-                    audio = self.augment_wav.reverberate(audio)
-                elif augtype == 2:
-                    audio = self.augment_wav.additive_noise('music', audio)
-                elif augtype == 3:
-                    audio = self.augment_wav.additive_noise('speech', audio)
-                elif augtype == 4:
-                    audio = self.augment_wav.additive_noise('noise', audio)
-
-            feat.append(audio)
-
-        feat = np.concatenate(feat, axis=0)
-        return torch.FloatTensor(feat), self.data_label[index]
-
-
-class ssl_dataset_loader(TrainLoader):
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     def augment_audio(self, audio):
         augtype = random.randint(0, 4)
         if augtype == 1:
@@ -193,12 +162,12 @@ class ssl_dataset_loader(TrainLoader):
 
         segs = []
         for _ in range(2):
-            audio = load_wav(self.data_list[idx], self.max_frames, evalmode=False)
+            audio = load_wav(
+                self.data_list[idx], self.max_frames, evalmode=False)
             seg = self.augment_audio(audio)
-            segs.append(seg)
+            segs.append(torch.FloatTensor(seg))
 
-        audio = np.concatenate(segs, axis=0)
-        return torch.FloatTensor(audio)
+        return segs
 
 
 class test_dataset_loader(Dataset):
@@ -215,81 +184,3 @@ class test_dataset_loader(Dataset):
 
     def __len__(self):
         return len(self.test_list)
-
-
-class TrainSampler(torch.utils.data.Sampler):
-    def __init__(self, data_source, nPerSpeaker, max_seg_per_spk, batch_size, seed, **kwargs):
-
-        self.data_label = data_source.data_label
-        self.nPerSpeaker = nPerSpeaker
-        self.max_seg_per_spk = max_seg_per_spk
-        self.batch_size = batch_size
-        self.epoch = 0
-        self.seed = seed
-        self.num_samples = None
-
-    def __len__(self) -> int:
-        return self.num_samples
-
-    def set_epoch(self, epoch: int) -> None:
-        self.epoch = epoch
-
-
-class train_dataset_sampler(TrainSampler):
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def __iter__(self):
-        g = torch.Generator()
-        g.manual_seed(self.seed + self.epoch)
-        indices = torch.randperm(len(self.data_label), generator=g).tolist()
-
-        data_dict = {}
-
-        # Sort into dictionary of file indices for each ID
-        for index in indices:
-            speaker_label = self.data_label[index]
-            if not (speaker_label in data_dict):
-                data_dict[speaker_label] = []
-            data_dict[speaker_label].append(index)
-
-        # Group file indices for each class
-        dictkeys = list(data_dict.keys())
-        dictkeys.sort()
-
-        # take sz number of elements
-        def lol(lst, sz): return [lst[i:i+sz] for i in range(0, len(lst), sz)]
-
-        flattened_list = []
-        flattened_label = []
-
-        for findex, key in enumerate(dictkeys):
-            data = data_dict[key]
-            numSeg = round_down(
-                min(len(data), self.max_seg_per_spk), self.nPerSpeaker)
-
-            rp = lol(np.arange(numSeg), self.nPerSpeaker)
-            flattened_label.extend([findex] * (len(rp)))
-            for indices in rp:
-                flattened_list.append([data[i] for i in indices])
-
-        # Mix data in random order
-        mixid = torch.randperm(len(flattened_label), generator=g).tolist()
-        mixlabel = []
-        mixmap = []
-
-        # Prevent two pairs of the same speaker in the same batch
-        for ii in mixid:
-            startbatch = round_down(len(mixlabel), self.batch_size)
-            if flattened_label[ii] not in mixlabel[startbatch:]:
-                mixlabel.append(flattened_label[ii])
-                mixmap.append(ii)
-
-        # len(mixed_list) = number of speakers
-        mixed_list = [flattened_list[i] for i in mixmap]
-
-        # Divide data to GPU
-        total_size = round_down(len(mixed_list), self.batch_size)
-        self.num_samples = total_size
-        return iter(mixed_list[:total_size])

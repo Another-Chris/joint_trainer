@@ -1,2 +1,6 @@
 data
 .model
+.pt
+.txt
+logs
+save

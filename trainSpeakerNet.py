@@ -8,15 +8,18 @@ import datetime
 import time
 import shutil
 import os
+import glob
 
-from SpeakerNet import *
-from DatasetLoader import *
+from trainer import *
+from loader import *
+from trainer.JointTrainer import JointTrainer
 from tuneThreshold import *
 from utils import get_args
 from torch.utils.tensorboard import SummaryWriter
 
 args = get_args()
 logdir = f'./logs/{args.experiment_name}'
+
 
 def evaluate(trainer):
     sc, lab, _ = trainer.evaluateFromList(**vars(args))
@@ -45,16 +48,8 @@ def save_scripts():
         f.write('%s' % args)
 
 
-def main_worker(args):
-    writer = SummaryWriter(logdir)
-
-    # load models
-    trainer = ModelTrainer(**vars(args))
-
-    it = 1
-
-    # initialize trainer and data loader
-    train_dataset = train_dataset_loader(**vars(args))
+def get_ssl_loader():
+    train_dataset = ssl_dataset_loader(**vars(args))
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -64,19 +59,65 @@ def main_worker(args):
         drop_last=False,
         shuffle=True
     )
+    return train_loader
+
+
+def get_sup_loader():
+    sup_dataset = train_dataset_loader(**vars(args))
+    sup_sampler = train_dataset_sampler(sup_dataset, **vars(args))
+    train_loader = torch.utils.data.DataLoader(
+        sup_dataset,
+        batch_size=args.batch_size,
+        num_workers=args.nDataLoaderThread,
+        pin_memory=False,
+        worker_init_fn=worker_init_fn,
+        drop_last=False,
+        sampler=sup_sampler
+    )
+    return train_loader
+
+
+def inf_train_gen(loader):
+    while True:
+        for data, label in loader:
+            yield data, label
+
+
+def main_worker(args):
+    writer = SummaryWriter(logdir)
+
+    ############### load models ###############
+
+    if args.training_mode == 'ssl':
+        train_loader = get_ssl_loader()
+        trainer = SSLTrainer(**vars(args))
+
+    elif args.training_mode == 'joint':
+        train_loader = get_ssl_loader()
+        sup_loader = get_sup_loader()
+        sup_gen = inf_train_gen(sup_loader)
+        trainer = JointTrainer(supervised_gen=sup_gen, **vars(args))
+
+    elif args.training_mode == 'supervised':
+        train_loader = get_sup_loader()
+        trainer = SupervisedTrainer(**vars(args))
 
     # either load the initial_model or read the previous model files
+    it = 1
     if (args.initial_model != ''):
         trainer.loadParameters(args.initial_model)
         print('model {} loaded!'.format(args.initial_model))
 
     # restart training
-    elif len(modelfiles) > 1:
+    else:
         modelfiles = glob.glob(f'{args.model_save_path}/model0*.model')
-        modelfiles.sort()
-        trainer.loadParameters(modelfiles[-1])
-        print('model {} loaded from previous state!'.format(modelfiles[-1]))
-        it = int(os.path.splitext(os.path.basename(modelfiles[-1]))[0][5:]) + 1
+        if len(modelfiles) > 1:
+            modelfiles.sort()
+            trainer.loadParameters(modelfiles[-1])
+            print('model {} loaded from previous state!'.format(
+                modelfiles[-1]))
+            it = int(os.path.splitext(
+                os.path.basename(modelfiles[-1]))[0][5:]) + 1
 
     for _ in range(1, it):
         trainer.__scheduler__.step()
@@ -84,7 +125,8 @@ def main_worker(args):
     # evaluation code
     # this is a separate command, not during training.
     if args.eval == True:
-        pytorch_total_params = sum(p.numel() for p in trainer.__model__.parameters())
+        pytorch_total_params = sum(p.numel()
+                                   for p in trainer.__model__.parameters())
 
         print('total params: ', pytorch_total_params)
         print('Test list: ', args.test_list)
@@ -97,6 +139,7 @@ def main_worker(args):
         return
 
     # core training script
+    print(f'training model: {args.training_mode}')
     for it in range(it, args.max_epoch + 1):
         print(f'epoch {it}')
 
@@ -106,7 +149,7 @@ def main_worker(args):
         loss = trainer.train_network(train_loader)
         writer.add_scalar('Loss/Train', loss, it)
         print(f'Epoch {it}, TLOSS {loss :.2f}, LR {max(clr):.8f}')
-        
+
         if it % args.test_interval == 0:
             eer, mindcf = evaluate(trainer)
 
@@ -114,10 +157,10 @@ def main_worker(args):
 
             mpath = f'{args.model_save_path}/model-{it}.model'
             trainer.saveParameters(mpath)
-        
+
             save_scripts()
             writer.add_scalar('EER/Eval', eer, it)
-            
+
 
 def main():
     if os.path.exists(logdir):
@@ -126,7 +169,7 @@ def main():
     args.model_save_path = args.save_path + "/model"
     args.result_save_path = args.save_path + "/result"
     args.feat_save_path = args.save_path + '/feature'
-    
+
     # exps/modelname/model
     os.makedirs(args.model_save_path, exist_ok=True)
     os.makedirs(args.result_save_path, exist_ok=True)

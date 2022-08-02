@@ -1,58 +1,20 @@
-import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-
 import importlib
-import torch
-import itertools
 import random
-import re
-import pickle
-import os 
+import torch
+import re 
+import itertools
+import sys 
+sys.path.append("..")
 
-from DatasetLoader import test_dataset_loader
-from tqdm import tqdm
+import numpy as np 
+import torch.nn.functional as F
 
-
-def save_features(feat_save_path, features, labels):
-    
-    if not os.path.exists(feat_save_path):
-        os.mkdir(feat_save_path)
-    
-    with open(f'{feat_save_path}/features.pkl', 'wb') as f:
-        pickle.dump(features, f)
-        
-    with open(f'{feat_save_path}/labels.pkl', 'wb') as f:
-        pickle.dump(labels, f)
+from .ModelWithHead import ModelWithHead
+from .utils import save_features
+from loader import test_dataset_loader
+from tqdm import tqdm 
 
 
-class ModelWithHead(nn.Module):
-    """backbone + projection head"""
-
-    def __init__(self, encoder, dim_in, head='mlp', feat_dim=128, **kwargs):
-        super().__init__(**kwargs)
-        self.encoder = encoder
-        if head == 'linear':
-            self.head = nn.Linear(dim_in, feat_dim)
-        elif head == 'mlp':
-            self.head = nn.Sequential(
-                nn.Linear(dim_in, dim_in),
-                nn.ReLU(inplace=True),
-                nn.Linear(dim_in, feat_dim)
-            )
-        else:
-            raise NotImplementedError(
-                'head not supported: {}'.format(head))
-            
-    def forward(self, x):
-        feat = self.encoder(x)
-        feat = self.head(feat)
-        feat = F.normalize(feat, dim=1)
-        return feat
-
-
-# driver class, define the optimizer and scheduler
-# this states how the model should be trained
 class ModelTrainer(object):
     def __init__(self, model, optimizer, scheduler, trainfunc, nPerSpeaker, **kwargs):
         
@@ -82,52 +44,7 @@ class ModelTrainer(object):
         self.nPerSpeaker = nPerSpeaker
 
         assert self.lr_step in ['epoch', 'iteration']
-
-    def train_network(self, loader):
-        self.__model__.train()
-        self.__model__.to(torch.device('cuda'))
-
-        counter = 0
-        loss = 0
-
-        pbar = tqdm(loader)
-        for data in pbar:
-            self.__model__.zero_grad()
-
-            # forward pass
-            data = torch.cat([data[0], data[1]], dim=0)
-            
-            # batch, 1, len
-            # 1, batch len
-            # batch * 1, len
-            data = data.transpose(1, 0)
-            data = data.reshape(-1, data.size()[-1]).cuda()
-            outp = self.__model__.forward(data)
-
-            bsz = outp.size()[0] // 2
-            f1, f2 = torch.split(outp, [bsz, bsz], dim=0)
-            outp = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-            nloss = self.__L__.forward(outp)
-
-            # backward pass
-            nloss.backward()
-            self.__optimizer__.step()
-
-            # record
-            loss += nloss.detach().cpu().item()
-            counter += 1
-
-            pbar.set_description(f'loss: {loss / counter :.3f}')
-            pbar.total = len(loader)
-
-            if self.lr_step == 'iteration':
-                self.__scheduler__.step()
-                
-        if self.lr_step == 'epoch':
-            self.__scheduler__.step()
-
-        return loss / (counter + 1e-6)
-
+        
     def evaluateFromList(self, test_list, test_path, nDataLoaderThread, num_eval=10, feat_save_path = '.', **kwargs):
 
         self.__model__.eval()

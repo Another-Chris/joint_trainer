@@ -65,16 +65,15 @@ def main_worker(args):
         shuffle=True
     )
 
-    # load model weights
-    modelfiles = glob.glob(f'{args.model_save_path}/model0*.model')
-    modelfiles.sort()
-
+    # either load the initial_model or read the previous model files
     if (args.initial_model != ''):
         trainer.loadParameters(args.initial_model)
         print('model {} loaded!'.format(args.initial_model))
 
     # restart training
     elif len(modelfiles) > 1:
+        modelfiles = glob.glob(f'{args.model_save_path}/model0*.model')
+        modelfiles.sort()
         trainer.loadParameters(modelfiles[-1])
         print('model {} loaded from previous state!'.format(modelfiles[-1]))
         it = int(os.path.splitext(os.path.basename(modelfiles[-1]))[0][5:]) + 1
@@ -106,7 +105,7 @@ def main_worker(args):
         # train_network: iterate through all the data
         loss = trainer.train_network(train_loader)
         writer.add_scalar('Loss/Train', loss, it)
-        print(f'Epoch {it}, TLOSS {loss :.2f}, LR {max(clr):.2f}')
+        print(f'Epoch {it}, TLOSS {loss :.2f}, LR {max(clr):.8f}')
         
         if it % args.test_interval == 0:
             eer, mindcf = evaluate(trainer)

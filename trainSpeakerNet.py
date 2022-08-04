@@ -49,7 +49,10 @@ def save_scripts():
         f.write('%s' % args)
 
 
-def get_ssl_loader():
+def get_ssl_loader(train_list=None, train_path=None):
+    if train_list is not None and train_path is not None:
+        args.train_list = train_list
+        args.train_path = train_path
     train_dataset = ssl_dataset_loader(**vars(args))
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -63,12 +66,12 @@ def get_ssl_loader():
     return train_loader
 
 
-def get_sup_loader(train_list = None, train_path = None):
-    
+def get_sup_loader(train_list=None, train_path=None):
+
     if train_list is not None and train_path is not None:
         args.train_list = train_list
         args.train_path = train_path
-    
+
     sup_dataset = train_dataset_loader(**vars(args))
     sup_sampler = train_dataset_sampler(sup_dataset, **vars(args))
     train_loader = torch.utils.data.DataLoader(
@@ -102,7 +105,7 @@ def main_worker(args):
         train_loader = get_ssl_loader()
         sup_loader = get_ssl_loader(
             train_path='./data/voxceleb2',
-            train_list = './data/train_list.txt'
+            train_list='./data/train_list.txt'
         )
         sup_gen = inf_train_gen(sup_loader)
         trainer = JointTrainer(supervised_gen=sup_gen, **vars(args))
@@ -110,8 +113,7 @@ def main_worker(args):
     elif args.training_mode == 'supervised':
         train_loader = get_sup_loader()
         trainer = SupervisedTrainer(**vars(args))
-        
-        
+
     else:
         raise ValueError("please specify a valid training mode")
 
@@ -146,8 +148,7 @@ def main_worker(args):
 
         eer, mindcf = evaluate(trainer)
 
-        print(
-            f'\n {time.strftime("%Y-%m-%d %H:%M:%S")}, eer: {eer:.4f}, minDCF: {mindcf:4f}')
+        print(f'eer: {eer:.4f}, minDCF: {mindcf:4f}')
 
         return
 
@@ -156,12 +157,22 @@ def main_worker(args):
     for it in range(it, args.max_epoch + 1):
         print(f'epoch {it}')
 
-        clr = [x['lr'] for x in trainer.__optimizer__.param_groups]
-
         # train_network: iterate through all the data
-        loss = trainer.train_network(train_loader)
-        writer.add_scalar('Loss/Train', loss, it)
-        print(f'Epoch {it}, TLOSS {loss :.2f}, LR {max(clr):.8f}')
+        loss = trainer.train_network(train_loader, it)
+
+        if args.training_mode == 'joint':
+            loss_total, loss_ssl, loss_sup = loss
+            writer.add_scalar('loss_total/Train', loss_total, it)
+            writer.add_scalar('loss_ssl/Train', loss_ssl, it)
+            writer.add_scalar('loss_sup/Train', loss_sup, it)
+            clr = trainer.__scheduler__.get_last_lr()[0]
+            print(
+                f'Epoch {it}, {loss_total = :.2f}, {loss_ssl = :.2f} {loss_sup = :.2f} {clr = :.8f}')
+
+        else:
+            clr = trainer.__scheduler__.get_last_lr()[0]
+            writer.add_scalar('Loss/Train', loss, it)
+            print(f'Epoch {it}, {loss = :.2f} {clr = :.8f}')
 
         if it % args.test_interval == 0:
             eer, mindcf = evaluate(trainer)

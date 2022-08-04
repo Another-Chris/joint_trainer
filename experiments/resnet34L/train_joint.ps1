@@ -1,6 +1,6 @@
 python ./trainSpeakerNet.py `
---save_path ./save/ResNetSE34L_joint_lan `
---experiment_name ResNetSE34L_joint_lan `
+--save_path ./save/ResNetSE34L_joint_supCon `
+--experiment_name ResNetSE34L_joint_supCon `
 --config ./configs/ResNetSE34L_SimSLR.yaml `
 --train_list data/train_list_cnceleb.txt `
 --test_list data/test_list_cnceleb.txt `
@@ -8,7 +8,11 @@ python ./trainSpeakerNet.py `
 --train_path data/cnceleb/data `
 --initial_model ./pre_trained/ResNetSE34L.model `
 --batch_size 128 `
---supervised_loss aamsoftmax `
+--supervised_loss subConLoss `
 --ssl_loss subConLoss `
 --training_mode joint `
---nDataLoaderThread 3
+--nDataLoaderThread 3 `
+--scheduler cos `
+--optimizer sgd `
+--test_interval 5 `
+--lr 1e-2

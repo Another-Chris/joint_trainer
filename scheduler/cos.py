@@ -3,12 +3,14 @@
 
 import torch
 
-def Scheduler(optimizer, test_interval, max_epoch, lr_decay, **kwargs):
 
-	sche_fn = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, step_size=test_interval, gamma=lr_decay)
+def Scheduler(optimizer, **kwargs):
 
-	lr_step = 'step'
+    sche_fn = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer, T_0=20, eta_min = 1e-7)
 
-	print('Initialised step LR scheduler')
+    lr_step = 'iteration'
 
-	return sche_fn, lr_step
+    print('Initialised step cos scheduler')
+
+    return sche_fn, lr_step

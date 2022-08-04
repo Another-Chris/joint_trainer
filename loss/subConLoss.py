@@ -18,6 +18,7 @@ class LossFunction(nn.Module):
         self.contrast_mode = contrast_mode
         self.base_temperature = base_temperature
         self.test_normalize = True # normalize the embeddings 
+        print("initialize supConLoss")
 
     def forward(self, features, labels=None, mask=None):
         """Compute loss for model. If both `labels` and `mask` are None,

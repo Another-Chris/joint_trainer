@@ -3,7 +3,6 @@ encoder_type: ECA
 nOut: 256
 sinc_stride: 10
 max_frames: 300
-batch_size: 32
 eval_frames: 400
 max_seg_per_spk: 500
 trainfunc: subConLoss

@@ -60,3 +60,5 @@ def ComputeMinDcf(fnrs, fprs, thresholds, p_target, c_miss, c_fa):
     c_def = min(c_miss * p_target, c_fa * (1 - p_target))
     min_dcf = min_c_det / c_def
     return min_dcf, min_c_det_threshold
+
+

@@ -62,6 +62,7 @@ class ssl_dataset_loader(TrainLoader):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        print(f'ssl dataset train list: {self.train_list}')
 
     def __getitem__(self, idx):
 
@@ -72,12 +73,13 @@ class ssl_dataset_loader(TrainLoader):
             seg = self.augment_audio(seg)
             segs.append(torch.FloatTensor(seg))
 
-        return segs
+        return segs, self.data_label[idx]
 
 
 class train_dataset_loader(TrainLoader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        print(f'train dataset train list: {self.train_list}')
 
     def __getitem__(self, indices):
 

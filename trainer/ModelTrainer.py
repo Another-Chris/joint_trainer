@@ -1,54 +1,46 @@
+from tqdm import tqdm
+import numpy as np
+from loader import test_dataset_loader
+from .utils import save_features
+import torch.nn.functional as F
 import importlib
 import random
 import torch
-import re 
+import re
 import itertools
-import sys 
+import sys
 sys.path.append("..")
-
-import numpy as np 
-import torch.nn.functional as F
-
-from .ModelWithHead import ModelWithHead
-from .utils import save_features
-from loader import test_dataset_loader
-from tqdm import tqdm 
 
 
 class ModelTrainer(object):
     def __init__(self, model, optimizer, scheduler, trainfunc, nPerSpeaker, **kwargs):
-        
-        
+
         model_fn = importlib.import_module(
             'models.' + model).__getattribute__('MainModel')
-        
-        encoder = model_fn(**kwargs)                 # embeddings
-        self.__model__ = ModelWithHead(encoder, 512) # training
-        
+
+        self.encoder = model_fn(**kwargs)                 # embeddings
 
         Optimizer = importlib.import_module(
             'optimizer.' + optimizer).__getattribute__('Optimizer')
-        self.__optimizer__ = Optimizer(self.__model__.parameters(), **kwargs)
-        
+        self.__optimizer__ = Optimizer(self.encoder.parameters(), **kwargs)
 
         Scheduler = importlib.import_module(
             'scheduler.' + scheduler).__getattribute__('Scheduler')
         self.__scheduler__, self.lr_step = Scheduler(
             self.__optimizer__, **kwargs)
 
-
         LossFunction = importlib.import_module(
             'loss.' + trainfunc).__getattribute__('LossFunction')
         self.__L__ = LossFunction(**kwargs)
-        
+
         self.nPerSpeaker = nPerSpeaker
 
         assert self.lr_step in ['epoch', 'iteration']
-        
-    def evaluateFromList(self, test_list, test_path, nDataLoaderThread, num_eval=10, feat_save_path = '.', **kwargs):
 
-        self.__model__.eval()
-        self.__model__.to(torch.device('cuda'))
+    def evaluateFromList(self, test_list, test_path, nDataLoaderThread, num_eval=10, feat_save_path='.', **kwargs):
+
+        self.encoder.eval()
+        self.encoder.to(torch.device('cuda'))
 
         lines = []
         files = []
@@ -73,10 +65,10 @@ class ModelTrainer(object):
         ########## extract features ##########
         print('--- extract features ---')
         pbar = tqdm(test_loader, total=len(test_loader))
-        
+
         features = []
         labels = []
-        
+
         for data in pbar:
             # data[0]: size(1,10,48240)
             # data[1]: tuple(fdir, )
@@ -84,16 +76,16 @@ class ModelTrainer(object):
             inp1 = data[0][0].cuda()
 
             with torch.no_grad():
-                ref_feat = self.__model__.encoder(inp1).detach().cpu()
-                
-                mean_feat = torch.mean(ref_feat, dim = 0)
-                label = re.findall(r'(id\d+)',data[1][0])[0]
-                
+                ref_feat = self.encoder(inp1).detach().cpu()
+
+                mean_feat = torch.mean(ref_feat, dim=0)
+                label = re.findall(r'(id\d+)', data[1][0])[0]
+
                 features.append(mean_feat.numpy())
                 labels.append(label)
-                
+
             feats[data[1][0]] = ref_feat
-        
+
         save_features(feat_save_path, features, labels)
 
         ########## compute the scores ##########
@@ -129,37 +121,29 @@ class ModelTrainer(object):
         return (all_scores, all_labels, all_trials)
 
     def saveParameters(self, path):
-        torch.save(self.__model__.state_dict(), path)
+        torch.save(self.encoder.state_dict(), path)
 
     def loadParameters(self, path):
+        self_state = self.encoder.state_dict()
 
-        # device = torch.device('cuda')
-        # loaded_state = torch.load(path, map_location=device)
-        # self.__model__.load_state_dict(loaded_state)
-        # loaded_state = torch.load(path, map_location="cuda:%d" % self.gpu)
-
-        self_state = self.__model__.encoder.state_dict()
-        
         loaded_state = torch.load(path, map_location="cuda:0")
-        
-        
+
         if 'model' in loaded_state:
             loaded_state = loaded_state['model']
-        
+
         if '__S__' in list(loaded_state.keys())[0]:
             newdict = {}
             delete_list = []
-            
+
             for name, param in loaded_state.items():
                 new_name = name.replace('__S__.', '')
                 newdict[new_name] = param
                 delete_list.append(name)
-                
+
             loaded_state.update(newdict)
             for name in delete_list:
-                del loaded_state[name]   
-                
-                            
+                del loaded_state[name]
+
         for name, param in loaded_state.items():
             origname = name
             if name not in self_state:
@@ -173,6 +157,6 @@ class ModelTrainer(object):
                 print("Wrong parameter length: {}, model: {}, loaded: {}".format(
                     origname, self_state[name].size(), loaded_state[origname].size()))
                 continue
-            
-            # this is how you load the params 
+
+            # this is how you load the params
             self_state[name].copy_(param)

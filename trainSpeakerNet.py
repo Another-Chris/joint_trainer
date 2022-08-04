@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 import os.path
 import sys
 import zipfile
@@ -62,7 +63,12 @@ def get_ssl_loader():
     return train_loader
 
 
-def get_sup_loader():
+def get_sup_loader(train_list = None, train_path = None):
+    
+    if train_list is not None and train_path is not None:
+        args.train_list = train_list
+        args.train_path = train_path
+    
     sup_dataset = train_dataset_loader(**vars(args))
     sup_sampler = train_dataset_sampler(sup_dataset, **vars(args))
     train_loader = torch.utils.data.DataLoader(
@@ -94,13 +100,20 @@ def main_worker(args):
 
     elif args.training_mode == 'joint':
         train_loader = get_ssl_loader()
-        sup_loader = get_sup_loader()
+        sup_loader = get_ssl_loader(
+            train_path='./data/voxceleb2',
+            train_list = './data/train_list.txt'
+        )
         sup_gen = inf_train_gen(sup_loader)
         trainer = JointTrainer(supervised_gen=sup_gen, **vars(args))
 
     elif args.training_mode == 'supervised':
         train_loader = get_sup_loader()
         trainer = SupervisedTrainer(**vars(args))
+        
+        
+    else:
+        raise ValueError("please specify a valid training mode")
 
     # either load the initial_model or read the previous model files
     it = 1

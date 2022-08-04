@@ -1,4 +1,5 @@
 from .ModelTrainer import ModelTrainer
+from .ModelWithHead import ModelWithHead
 from tqdm import tqdm 
 
 import torch 
@@ -7,28 +8,25 @@ class SSLTrainer(ModelTrainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
+        self.source_model = ModelWithHead(
+            self.encoder, dim_in=kwargs['nOut'], feat_dim=256)
+        
         
     def train_network(self, loader):
-        self.__model__.train()
-        self.__model__.to(torch.device('cuda'))
+        self.source_model.train()
+        self.source_model.to(torch.device('cuda'))
 
         counter = 0
         loss = 0
 
         pbar = tqdm(loader)
         for data in pbar:
-            self.__model__.zero_grad()
+            self.source_model.zero_grad()
 
             # forward pass
             data = torch.cat([data[0], data[1]], dim=0)
-            
-            # batch, 1, len
-            # 1, batch len
-            # batch * 1, len
-            data = data.transpose(1, 0)
-            data = data.reshape(-1, data.size()[-1]).cuda()
-            outp = self.__model__.forward(data)
-            outp = outp.reshape(self.nPerSpeaker, -1, outp.size()[-1]).transpose(1, 0).squeeze(1)
+            data = data.squeeze(1).cuda()
+            outp = self.source_model.forward(data)
             
             bsz = outp.size()[0] // 2
             f1, f2 = torch.split(outp, [bsz, bsz], dim=0)

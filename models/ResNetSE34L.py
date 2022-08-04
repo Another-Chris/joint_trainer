@@ -9,7 +9,17 @@ from torch.nn import Parameter
 from models.ResNetBlocks import *
 
 class ResNetSE(nn.Module):
-    def __init__(self, block, layers, num_filters, nOut, encoder_type='SAP', n_mels=40, log_input=True, **kwargs):
+    def __init__(
+        self, 
+        block, 
+        layers, 
+        num_filters, 
+        nOut, 
+        encoder_type='SAP', 
+        n_mels=40, 
+        log_input=True, 
+        **kwargs
+        ):
         super(ResNetSE, self).__init__()
 
         print('Embedding size is %d, encoder %s.'%(nOut, encoder_type))

@@ -1,2 +1,6 @@
 data
 .model
+draws
+logs
+pre_trained
+save

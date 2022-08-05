@@ -61,7 +61,7 @@ def main_worker(args):
 
     # initialize trainer and data loader
     train_dataset = train_dataset_loader(**vars(args))
-    train_sampler = train_dataset_sampler(train_dataset, **vars(args))
+    train_sampler = train_dataset_sampler(data_source = train_dataset, **vars(args))
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=args.batch_size,

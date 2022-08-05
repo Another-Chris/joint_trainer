@@ -8,3 +8,5 @@ draws
 pre_trained
 venv
 .vscode
+__pycache__
+.pyc

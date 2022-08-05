@@ -39,11 +39,11 @@ class JointTrainer(ModelTrainer):
         return outpcat
 
     def train_network(self, loader, epoch=None):
-
+        
         self.put_to_device()
         self.sup_model.train()
         self.ssl_model.train()
-
+        
         counter = 0
         loss = 0
         sup_loss = 0
@@ -71,7 +71,7 @@ class JointTrainer(ModelTrainer):
             sup_loss_val = self.sup_loss(outp, sup_label)
 
             if type(sup_loss_val) == tuple:
-                sup_loss_val, _ = sup_loss_val
+                sup_loss_val  = sup_loss_val[0]
 
             ################# SSL #################
             self.ssl_model.zero_grad()
@@ -100,6 +100,7 @@ class JointTrainer(ModelTrainer):
 
             if self.lr_step == 'iteration':
                 self.__scheduler__.step(epoch + step / len(loader))
+        
 
         if self.lr_step == 'epoch':
             self.__scheduler__.step()

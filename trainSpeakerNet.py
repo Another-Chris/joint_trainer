@@ -1,3 +1,13 @@
+from torch.utils.tensorboard import SummaryWriter
+from utils import get_args
+from tuneThreshold import *
+from trainer.JointTrainer import JointTrainer
+from loader import *
+from trainer import *
+import glob
+import os
+import shutil
+import datetime
 from multiprocessing.sharedctypes import Value
 import os.path
 import sys
@@ -5,18 +15,8 @@ import zipfile
 
 import torch.cuda
 import torch
-import datetime
-import time
-import shutil
-import os
-import glob
+torch.cuda.empty_cache()
 
-from trainer import *
-from loader import *
-from trainer.JointTrainer import JointTrainer
-from tuneThreshold import *
-from utils import get_args
-from torch.utils.tensorboard import SummaryWriter
 
 args = get_args()
 logdir = f'./logs/{args.experiment_name}'
@@ -36,11 +36,14 @@ def evaluate(trainer):
 
 def save_scripts():
     # save training code and params
-    pyfiles = glob.glob('./*.py')
+    pyfiles = glob.glob('./*.py') + glob.glob('./*/*.py')
     strtime = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
-    zipf = zipfile.ZipFile(args.result_save_path + '/run%s.zip' %
-                           strtime, 'w', zipfile.ZIP_DEFLATED)
+    zipf = zipfile.ZipFile(
+        f'{args.result_save_path}/run{strtime}.zip',
+        'w',
+        zipfile.ZIP_DEFLATED)
+
     for file in pyfiles:
         zipf.write(file)
     zipf.close()
@@ -102,16 +105,17 @@ def main_worker(args):
         trainer = SSLTrainer(**vars(args))
 
     elif args.training_mode == 'joint':
-        train_loader = get_ssl_loader()
-        sup_loader = get_ssl_loader(
-            train_path='./data/voxceleb2',
-            train_list='./data/train_list.txt'
+        train_loader = get_ssl_loader(
+            train_list=args.ssl_list, train_path=args.ssl_path
+        )
+        sup_loader = get_sup_loader(
+            train_list=args.sup_list, train_path=args.sup_path
         )
         sup_gen = inf_train_gen(sup_loader)
         trainer = JointTrainer(supervised_gen=sup_gen, **vars(args))
 
     elif args.training_mode == 'supervised':
-        train_loader = get_sup_loader()
+        train_loader = get_ssl_loader()
         trainer = SupervisedTrainer(**vars(args))
 
     else:

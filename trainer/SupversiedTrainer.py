@@ -1,3 +1,4 @@
+from yaml import load
 from .ModelTrainer import ModelTrainer
 from .ModelWithHead import ModelWithHead
 from tqdm import tqdm
@@ -9,9 +10,9 @@ class SupervisedTrainer(ModelTrainer):
         super().__init__(**kwargs)
         
         self.source_model = ModelWithHead(
-            self.encoder, dim_in=kwargs['nOut'], feat_dim=256)
+            self.encoder, dim_in=kwargs['nOut'], head = 'linear', feat_dim=128)
 
-    def train_network(self, loader):
+    def train_network(self, loader, epoch):
         self.source_model.train()
         self.source_model.to(torch.device('cuda'))
         self.__L__.cuda()
@@ -19,20 +20,25 @@ class SupervisedTrainer(ModelTrainer):
         counter = 0
         loss = 0
 
-        pbar = tqdm(loader)
-        for data, label in pbar:
-            data = data.transpose(1, 0)
+        pbar = tqdm(enumerate(loader), total = len(loader))
+        for step, (data, label) in pbar:
             label = label.float()
             label = label.cuda()
 
             self.source_model.zero_grad()
 
             ################# supervised #################
-            data = data.reshape(-1, data.size()[-1]).cuda()
-            pred = self.source_model(data)
-            pred = pred.reshape(self.nPerSpeaker, -1, pred.size()[-1]).transpose(1, 0).squeeze(1)
+            data = torch.cat([data[0], data[1]], dim=0)
+            data = data.squeeze(1).cuda()
             
-            nloss, _ = self.__L__(pred, label)
+            outp = self.source_model(data)
+ 
+            bsz = outp.size()[0] // 2
+            f1, f2 = torch.split(outp, [bsz, bsz], dim=0)
+
+            # outpcat: bz, ncrops, dim
+            outp = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+            nloss = self.__L__(outp, label)
 
             ################# backward pass  #################
             nloss.backward()
@@ -46,7 +52,7 @@ class SupervisedTrainer(ModelTrainer):
             pbar.total = len(loader)
 
             if self.lr_step == 'iteration':
-                self.__scheduler__.step()
+                self.__scheduler__.step(epoch + step / len(loader))
 
         if self.lr_step == 'epoch':
             self.__scheduler__.step()

@@ -82,6 +82,16 @@ def get_args():
                         help='ssl loss, used only for joint training')
     parser.add_argument('--training_mode', default='ssl', type=str,
                         help='training mode. available: ssl, joint, supervised')
+    
+    parser.add_argument('--ssl_path', default='./data/cnceleb/data', type=str,
+                        help='only for joint training. data for ssl')
+    parser.add_argument('--sup_path', default='./data/voxceleb2', type=str,
+                        help='only for joint training. data for sup')
+    parser.add_argument('--ssl_list', default='./data/train_list_cnceleb.txt', type=str,
+                        help='only for joint training. train list for ssl')
+    parser.add_argument('--sup_list', default='./data/train_list.txt', type=str,
+                        help='only for joint training. train list for sup')
+    
 
     # optimizer
     parser.add_argument('--optimizer', type=str,

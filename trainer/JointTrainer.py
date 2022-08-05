@@ -15,14 +15,16 @@ class JointTrainer(ModelTrainer):
         ssl_lossfn = importlib.import_module(
             'loss.' + ssl_loss).__getattribute__('LossFunction')
 
-        self.sup_loss = sup_lossfn(**kwargs)
-        self.ssl_loss = ssl_lossfn(**kwargs)
+        self.sup_loss = sup_lossfn(**kwargs, temperature=0.1)
+        self.ssl_loss = ssl_lossfn(**kwargs, temperature=0.1)
+        
 
         embed_size = kwargs['nOut']
         self.source_model = ModelWithHead(
-            self.encoder, dim_in=embed_size, feat_dim=embed_size)
+            self.encoder, dim_in=embed_size, head='mlp', feat_dim=128)
+  
         self.target_model = ModelWithHead(
-            self.encoder, dim_in=embed_size, feat_dim=embed_size)
+            self.encoder, dim_in=embed_size, head='mlp', feat_dim=128)
 
         self.supervised_gen = supervised_gen
 
@@ -33,17 +35,9 @@ class JointTrainer(ModelTrainer):
         self.ssl_loss.to(device)
         self.sup_loss.to(device)
 
-    def forward_pairs(self, data):
-        data = torch.cat([data[0], data[1]], dim=0)
-
-        data = data.squeeze(1).cuda()
-        outp = self.target_model(data)
-
-        bsz = outp.size()[0] // 2
-        f1, f2 = torch.split(outp, [bsz, bsz], dim=0)
-
-        # outpcat: bz, ncrops, dim
-        outpcat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+    def split_and_cat(self, outp, nPerSpeaker):
+        fs = torch.split(outp, outp.size()[0] // nPerSpeaker, dim=0)
+        outpcat = torch.cat([f.unsqueeze(1) for f in fs], dim=1)
         return outpcat
 
     def train_network(self, loader, epoch=None):
@@ -60,21 +54,37 @@ class JointTrainer(ModelTrainer):
         pbar = tqdm(enumerate(loader), total=len(loader))
         for step, (data, _) in pbar:
 
+            nPerSpeaker = len(data)
+
             ################# SSL #################
             self.target_model.zero_grad()
-            outp = self.forward_pairs(data)
-            ssl_loss_val = self.ssl_loss(outp)
+
+            data = torch.cat([d for d in data], dim=0)
+
+            data = data.squeeze(1).cuda()
+            outp = self.target_model(data)
+            ssl_loss_val = self.ssl_loss(
+                self.split_and_cat(outp, nPerSpeaker))
 
             ################# supervised #################
             self.source_model.zero_grad()
 
             sup_data, sup_label = next(self.supervised_gen)
+            
+            sup_data = sup_data.transpose(1, 0)
+            sup_data = sup_data.reshape(-1, sup_data.size()[-1]).cuda()
+            
             sup_label = sup_label.float().cuda()
-            outp = self.forward_pairs(sup_data)
-            sup_loss_val = self.sup_loss(outp, sup_label)
 
+            osup = self.encoder(sup_data)
+            outp = outp.reshape(self.nPerSpeaker, -1, outp.size()[-1]).transpose(1, 0).squeeze(1)
+            
+            sup_loss_val = self.sup_loss(osup, sup_label)
+            
+            if type(sup_loss_val) == tuple:
+                sup_loss_val, _  = sup_loss_val
             ################# backward pass  #################
-            loss_val = ssl_loss_val + 0.5 * sup_loss_val
+            loss_val = ssl_loss_val + sup_loss_val
             loss_val.backward()
             self.__optimizer__.step()
 
@@ -89,9 +99,8 @@ class JointTrainer(ModelTrainer):
                 f'{loss/counter=:.3f} {ssl_loss/counter=:.3f} {sup_loss/counter=:.2f}')
 
             if self.lr_step == 'iteration':
-                # cosine scheduler with warm restart
                 self.__scheduler__.step(epoch + step / len(loader))
-            
+
         if self.lr_step == 'epoch':
             self.__scheduler__.step()
 

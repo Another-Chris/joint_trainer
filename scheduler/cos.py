@@ -7,7 +7,7 @@ import torch
 def Scheduler(optimizer, **kwargs):
 
     sche_fn = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
-        optimizer, T_0=20, eta_min = 1e-7)
+        optimizer, T_0=16, eta_min = 1e-5)
 
     lr_step = 'iteration'
 

@@ -1,40 +1,22 @@
 from models.ResNetSE34L import MainModel
 from loader import test_dataset_loader
-from tqdm import tqdm 
+from tqdm import tqdm
 from tuneThreshold import ComputeErrorRates, tuneThresholdfromScore
+from trainer.ModelWithHead import ModelWithHead
 
 import torch
 import itertools
 import re
-import random 
+import random
 
-import numpy as np 
+import numpy as np
 import torch.nn.functional as F
 
 #####################
-##### load model  
+# start test
 #####################
-model_args = dict(
-    nOut=512,
-    encoder_type='SAP',
-    n_mels=40,
-    log_input=True
-)
-
-
-model = MainModel(**vars(model_args))
-
-loaded_dict = torch.load_dict('./ResNetSE34L.model')
-model.load_state_dict(loaded_dict)
-
-model.eval()
-model.to(torch.device('cuda'))
-
-#####################
-##### start test  
-#####################
-test_list = "./data/test_list.txt"
-test_path = "./data/cnceleb"
+test_list = "./data/test_list_cnceleb.txt"
+test_path = "./data/cnceleb/eval"
 nDataLoaderThread = 6
 num_eval = 10
 
@@ -53,74 +35,94 @@ setfiles = list(set(files))
 setfiles.sort()
 
 # Define test data loader
-test_dataset = test_dataset_loader(setfiles, test_path, num_eval=num_eval)
+test_dataset = test_dataset_loader(
+    setfiles, test_path, num_eval=num_eval, eval_frames=300)
 test_loader = torch.utils.data.DataLoader(
-    test_dataset, 
-    batch_size=1, 
-    shuffle=False, 
-    num_workers=nDataLoaderThread, 
-    drop_last=False, 
+    test_dataset,
+    batch_size=1,
+    shuffle=False,
+    num_workers=nDataLoaderThread,
+    drop_last=False,
     sampler=None
 )
 
-########## extract features ##########
-print('--- extract features ---')
-pbar = tqdm(test_loader, total=len(test_loader))
 
-features = []
-labels = []
+if __name__ == '__main__':
 
-for data in pbar:
-    # data[0]: size(1,10,48240)
-    # data[1]: tuple(fdir, )
+    model_args = dict(
+        nOut=512,
+        encoder_type='SAP',
+        n_mels=40,
+        log_input=True
+    )
 
-    inp1 = data[0][0].cuda()
+    model = ModelWithHead(MainModel(**model_args), dim_in=model_args['nOut'])
 
-    with torch.no_grad():
-        ref_feat = model(inp1).detach().cpu()
+    loaded_dict = torch.load('./ResNetSE34L-joint-cnceleb.model')
 
-        mean_feat = torch.mean(ref_feat, dim=0)
-        label = re.findall(r'(id\d+)', data[1][0])[0]
+    model.load_state_dict(loaded_dict)
+    print('model loaded!')
 
-        features.append(mean_feat.numpy())
-        labels.append(label)
+    model.eval()
+    model.to(torch.device('cuda'))
 
-    feats[data[1][0]] = ref_feat
+    ########## extract features ##########
 
+    print('--- extract features ---')
+    pbar = tqdm(test_loader, total=len(test_loader))
 
-########## compute the scores ##########
-all_scores = []
-all_labels = []
-all_trials = []
+    features = []
+    labels = []
 
-pbar = tqdm(lines)
-for line in pbar:
+    for data in pbar:
+        # data[0]: size(1,10,48240)
+        # data[1]: tuple(fdir, )
 
-    data = line.split()
+        inp1 = data[0][0].cuda()
 
-    # Append random label if missing
-    if len(data) == 2:
-        data = [random.randint(0, 1)] + data
+        with torch.no_grad():
+            ref_feat = model.encoder(inp1).detach().cpu()
 
-    ref_feat = feats[data[1]].cuda()
-    com_feat = feats[data[2]].cuda()
+            mean_feat = torch.mean(ref_feat, dim=0)
+            label = re.findall(r'(id\d+)', data[1][0])[0]
 
-    # normalize feature 
-    ref_feat = F.normalize(ref_feat, p=2, dim=1)
-    com_feat = F.normalize(com_feat, p=2, dim=1)
+            features.append(mean_feat.numpy())
+            labels.append(label)
 
-    dist = torch.cdist(ref_feat.reshape(
-        num_eval, -1), com_feat.reshape(num_eval, -1)).detach().cpu().numpy()
+        feats[data[1][0]] = ref_feat
 
-    score = -1 * np.mean(dist)
+    ########## compute the scores ##########
+    all_scores = []
+    all_labels = []
+    all_trials = []
 
-    all_scores.append(score)
-    all_labels.append(int(data[0]))
-    all_trials.append(data[1] + " " + data[2])
+    pbar = tqdm(lines)
+    for line in pbar:
 
+        data = line.split()
 
-_, eer, _, _ = tuneThresholdfromScore(all_scores, all_labels, [1, 0.1])
-fnrs, fprs, thresholds = ComputeErrorRates(all_scores, all_labels)
+        # Append random label if missing
+        if len(data) == 2:
+            data = [random.randint(0, 1)] + data
 
-print("test finish! ")
-print(f"{eer = }")
+        ref_feat = feats[data[1]].cuda()
+        com_feat = feats[data[2]].cuda()
+
+        # normalize feature
+        ref_feat = F.normalize(ref_feat, p=2, dim=1)
+        com_feat = F.normalize(com_feat, p=2, dim=1)
+
+        dist = torch.cdist(ref_feat.reshape(
+            num_eval, -1), com_feat.reshape(num_eval, -1)).detach().cpu().numpy()
+
+        score = -1 * np.mean(dist)
+
+        all_scores.append(score)
+        all_labels.append(int(data[0]))
+        all_trials.append(data[1] + " " + data[2])
+
+    _, eer, _, _ = tuneThresholdfromScore(all_scores, all_labels, [1, 0.1])
+    fnrs, fprs, thresholds = ComputeErrorRates(all_scores, all_labels)
+
+    print("test finish! ")
+    print(f"{eer = }")

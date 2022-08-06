@@ -2,6 +2,7 @@ from tqdm import tqdm
 import numpy as np
 from loader import test_dataset_loader
 from .utils import save_features
+from .ModelWithHead import ModelWithHead
 import torch.nn.functional as F
 import importlib
 import random
@@ -19,10 +20,13 @@ class ModelTrainer(object):
             'models.' + model).__getattribute__('MainModel')
 
         self.encoder = model_fn(**kwargs)                 # embeddings
+        self.encoder_with_head = ModelWithHead(
+            self.encoder, dim_in=kwargs['nOut'], head='mlp')
 
         Optimizer = importlib.import_module(
             'optimizer.' + optimizer).__getattribute__('Optimizer')
-        self.__optimizer__ = Optimizer(self.encoder.parameters(), **kwargs)
+
+        self.__optimizer__ = Optimizer(self.encoder_with_head.parameters(), **kwargs)
 
         Scheduler = importlib.import_module(
             'scheduler.' + scheduler).__getattribute__('Scheduler')

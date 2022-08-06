@@ -1,5 +1,4 @@
 from tqdm import tqdm
-from .ModelWithHead import ModelWithHead
 from .ModelTrainer import ModelTrainer
 import torch
 import importlib
@@ -18,18 +17,11 @@ class JointTrainer(ModelTrainer):
         self.sup_loss = sup_lossfn(**kwargs)
         self.ssl_loss = ssl_lossfn(**kwargs)
 
-        embed_size = kwargs['nOut']
-        self.sup_model = self.encoder
-
-        self.ssl_model = ModelWithHead(
-            self.encoder, dim_in=embed_size, head='mlp', feat_dim=128)
-
         self.supervised_gen = supervised_gen
 
     def put_to_device(self):
         device = torch.device('cuda')
-        self.sup_model.to(device)
-        self.ssl_model.to(device)
+        self.encoder_with_head.to(device)
         self.ssl_loss.to(device)
         self.sup_loss.to(device)
 
@@ -41,8 +33,7 @@ class JointTrainer(ModelTrainer):
     def train_network(self, loader, epoch=None):
         
         self.put_to_device()
-        self.sup_model.train()
-        self.ssl_model.train()
+        self.encoder_with_head.train()
         
         counter = 0
         loss = 0
@@ -51,20 +42,29 @@ class JointTrainer(ModelTrainer):
 
         pbar = tqdm(enumerate(loader), total=len(loader))
         for step, (data, _) in pbar:
-
+            
             nPerSpeaker = len(data)  # data: [segs]
+            self.encoder_with_head.zero_grad()
+            
+            ################# SSL #################
+            data = torch.cat([d for d in data], dim=0)
+            
+            data = data.squeeze(1).cuda()
+            outp = self.encoder_with_head(data)
+            fs = torch.split(outp, outp.size()[0] // nPerSpeaker, dim=0)
+            outp = torch.cat([f.unsqueeze(1) for f in fs], dim=1)
+            ssl_loss_val = self.ssl_loss(outp)
 
             ################# supervised #################
-            self.sup_model.zero_grad()
 
             sup_data, sup_label = next(self.supervised_gen)
 
             sup_data = sup_data.transpose(1, 0)
             sup_data = sup_data.reshape(-1, sup_data.size()[-1]).cuda()
 
-            sup_label = sup_label.float().cuda()
+            sup_label = sup_label.long().cuda()
 
-            outp = self.sup_model(sup_data)
+            outp = self.encoder_with_head.encoder(sup_data)
 
             outp = outp.reshape(self.nPerSpeaker, -1,
                                 outp.size()[-1]).transpose(1, 0).squeeze(1)
@@ -73,15 +73,6 @@ class JointTrainer(ModelTrainer):
             if type(sup_loss_val) == tuple:
                 sup_loss_val  = sup_loss_val[0]
 
-            ################# SSL #################
-            self.ssl_model.zero_grad()
-
-            data = torch.cat([d for d in data], dim=0)
-
-            data = data.squeeze(1).cuda()
-            outp = self.ssl_model(data)
-            ssl_loss_val = self.ssl_loss(
-                self.split_and_cat(outp, nPerSpeaker))
 
             ################# backward pass  #################
             loss_val = ssl_loss_val + sup_loss_val

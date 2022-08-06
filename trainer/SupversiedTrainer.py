@@ -1,6 +1,5 @@
 from yaml import load
 from .ModelTrainer import ModelTrainer
-from .ModelWithHead import ModelWithHead
 from tqdm import tqdm
 
 import torch
@@ -8,13 +7,10 @@ import torch
 class SupervisedTrainer(ModelTrainer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        
-        self.source_model = ModelWithHead(
-            self.encoder, dim_in=kwargs['nOut'], head = 'linear', feat_dim=128)
-
+    
     def train_network(self, loader, epoch):
-        self.source_model.train()
-        self.source_model.to(torch.device('cuda'))
+        self.encoder.train()
+        self.encoder.to(torch.device('cuda'))
         self.__L__.cuda()
 
         counter = 0
@@ -25,27 +21,29 @@ class SupervisedTrainer(ModelTrainer):
             label = label.float()
             label = label.cuda()
 
-            self.source_model.zero_grad()
+            self.encoder.zero_grad()
 
             ################# supervised #################
-            data = torch.cat([data[0], data[1]], dim=0)
-            data = data.squeeze(1).cuda()
-            
-            outp = self.source_model(data)
- 
-            bsz = outp.size()[0] // 2
-            f1, f2 = torch.split(outp, [bsz, bsz], dim=0)
+            data = data.transpose(1, 0)
+            data = data.reshape(-1, data.size()[-1]).cuda()
 
-            # outpcat: bz, ncrops, dim
-            outp = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-            nloss = self.__L__(outp, label)
+            label = label.long().cuda()
+
+            outp = self.encoder(data)
+
+            outp = outp.reshape(self.nPerSpeaker, -1,
+                                outp.size()[-1]).transpose(1, 0).squeeze(1)
+            sup_loss_val = self.__L__(outp, label)
+
+            if type(sup_loss_val) == tuple:
+                sup_loss_val  = sup_loss_val[0]
 
             ################# backward pass  #################
-            nloss.backward()
+            sup_loss_val.backward()
             self.__optimizer__.step()
 
             # record
-            loss += nloss.detach().cpu().item()
+            loss += sup_loss_val.detach().cpu().item()
             counter += 1
 
             pbar.set_description(f'loss: {loss / counter :.3f}')

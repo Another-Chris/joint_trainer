@@ -11,6 +11,7 @@ import random
 
 import numpy as np
 import torch.nn.functional as F
+import pandas as pd 
 
 #####################
 # start test
@@ -28,6 +29,7 @@ feats = {}
 # Read all lines
 with open(test_list) as f:
     lines = f.readlines()
+    
 
 # Get a list of unique file names
 files = list(itertools.chain(*[x.strip().split()[-2:] for x in lines]))
@@ -56,11 +58,11 @@ if __name__ == '__main__':
         log_input=True
     )
 
-    model = ModelWithHead(MainModel(**model_args), dim_in=model_args['nOut'])
+    model = MainModel(**model_args)
 
-    loaded_dict = torch.load('./ResNetSE34L-joint-cnceleb.model')
-
+    loaded_dict = torch.load('./save/ResNetSE34L_sup/model/model-100.model')
     model.load_state_dict(loaded_dict)
+        
     print('model loaded!')
 
     model.eval()
@@ -81,7 +83,7 @@ if __name__ == '__main__':
         inp1 = data[0][0].cuda()
 
         with torch.no_grad():
-            ref_feat = model.encoder(inp1).detach().cpu()
+            ref_feat = model(inp1).detach().cpu()
 
             mean_feat = torch.mean(ref_feat, dim=0)
             label = re.findall(r'(id\d+)', data[1][0])[0]
@@ -112,10 +114,14 @@ if __name__ == '__main__':
         ref_feat = F.normalize(ref_feat, p=2, dim=1)
         com_feat = F.normalize(com_feat, p=2, dim=1)
 
+        # euclidean dis
         dist = torch.cdist(ref_feat.reshape(
             num_eval, -1), com_feat.reshape(num_eval, -1)).detach().cpu().numpy()
-
         score = -1 * np.mean(dist)
+        
+        # cos dis
+        # dist = torch.matmul(ref_feat, com_feat.T).detach().cpu().numpy()
+        # score = dist.mean()
 
         all_scores.append(score)
         all_labels.append(int(data[0]))
@@ -126,3 +132,9 @@ if __name__ == '__main__':
 
     print("test finish! ")
     print(f"{eer = }")
+
+    df = pd.DataFrame({"label": all_labels, "score": all_scores})
+    split = pd.Series(all_trials).str.split(" ", expand = True)
+    split.columns = ["enroll", "test"]
+    df = pd.concat([df, split], axis = 1)
+    df.to_csv(f"./scores-{eer :.3f}.csv", index = False)

@@ -11,6 +11,6 @@ def Scheduler(optimizer, **kwargs):
 
     lr_step = 'iteration'
 
-    print('Initialised step cos scheduler')
+    print('Initialised cos scheduler')
 
     return sche_fn, lr_step

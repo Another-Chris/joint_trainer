@@ -115,7 +115,7 @@ def main_worker(args):
         trainer = JointTrainer(supervised_gen=sup_gen, **vars(args))
 
     elif args.training_mode == 'supervised':
-        train_loader = get_ssl_loader()
+        train_loader = get_sup_loader()
         trainer = SupervisedTrainer(**vars(args))
 
     else:

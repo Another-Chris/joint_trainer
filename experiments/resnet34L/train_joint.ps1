@@ -12,8 +12,8 @@ python ./trainSpeakerNet.py `
 --ssl_loss subConLoss `
 --training_mode joint `
 --nDataLoaderThread 3 `
---scheduler cos `
---optimizer sgd `
 --test_interval 5 `
---lr 1e-3 `
 --nPerSpeaker 2
+# --scheduler cos `
+# --optimizer sgd `
+# --lr 1e-3 `

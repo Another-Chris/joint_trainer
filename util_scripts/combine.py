@@ -48,7 +48,7 @@ def convert_process(files):
         prev_label = label
 
 
-files = glob.glob('../data/cnceleb/*/*/*.flac')
+files = glob.glob('../data/cnceleb/data/*/*.flac')
 
 if __name__ == '__main__':
     nprocess = 8

@@ -12,6 +12,10 @@ def write(files, lines):
     for file in tqdm(files):
 
         signal, sr = sf.read(file)
+        
+        if 'concat' in file:
+            continue
+        
         if len(signal) // sr < 5:
             continue
         
@@ -43,6 +47,6 @@ if __name__ == '__main__':
     if os.path.exists('../data/train_list_cnceleb.txt'):
         os.unlink('../data/train_list_cnceleb.txt')
         
-    with open('../data/train_list_cnceleb.txt', 'w') as f:
+    with open('../data/train_list_cnceleb_2.txt', 'w') as f:
         for line in lines:
             f.write(line)

@@ -160,7 +160,6 @@ def main_worker(args):
     print(f'training model: {args.training_mode}')
     for it in range(it, args.max_epoch + 1):
         print(f'epoch {it}')
-
         # train_network: iterate through all the data
         loss = trainer.train_network(train_loader, it)
 

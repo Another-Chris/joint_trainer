@@ -14,28 +14,18 @@ sys.path.append("..")
 
 
 class ModelTrainer(object):
-    def __init__(self, model, optimizer, scheduler, trainfunc, nPerSpeaker, **kwargs):
+    def __init__(self, model, optimizer, scheduler, nPerSpeaker, **kwargs):
 
-        model_fn = importlib.import_module(
-            'models.' + model).__getattribute__('MainModel')
+        model_fn = importlib.import_module('models.' + model).__getattribute__('MainModel')
 
-        self.encoder = model_fn(**kwargs)                 # embeddings
-        self.encoder_with_head = ModelWithHead(
-            self.encoder, dim_in=kwargs['nOut'], head='mlp')
+        self.encoder = model_fn(**kwargs) # embeddings
+        self.encoder_with_head = ModelWithHead(self.encoder, dim_in=kwargs['nOut'], head='mlp') # projections with head
 
-        Optimizer = importlib.import_module(
-            'optimizer.' + optimizer).__getattribute__('Optimizer')
-
+        Optimizer = importlib.import_module('optimizer.' + optimizer).__getattribute__('Optimizer')
         self.__optimizer__ = Optimizer(self.encoder_with_head.parameters(), **kwargs)
 
-        Scheduler = importlib.import_module(
-            'scheduler.' + scheduler).__getattribute__('Scheduler')
-        self.__scheduler__, self.lr_step = Scheduler(
-            self.__optimizer__, **kwargs)
-
-        LossFunction = importlib.import_module(
-            'loss.' + trainfunc).__getattribute__('LossFunction')
-        self.__L__ = LossFunction(**kwargs)
+        Scheduler = importlib.import_module('scheduler.' + scheduler).__getattribute__('Scheduler')
+        self.__scheduler__, self.lr_step = Scheduler(self.__optimizer__, **kwargs)
 
         self.nPerSpeaker = nPerSpeaker
 
@@ -108,10 +98,6 @@ class ModelTrainer(object):
 
             ref_feat = feats[data[1]].cuda()
             com_feat = feats[data[2]].cuda()
-
-            if self.__L__.test_normalize:
-                ref_feat = F.normalize(ref_feat, p=2, dim=1)
-                com_feat = F.normalize(com_feat, p=2, dim=1)
 
             dist = torch.cdist(ref_feat.reshape(
                 num_eval, -1), com_feat.reshape(num_eval, -1)).detach().cpu().numpy()

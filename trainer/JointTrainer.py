@@ -91,6 +91,7 @@ class JointTrainer(ModelTrainer):
 
             if self.lr_step == 'iteration':
                 self.__scheduler__.step(epoch + step / len(loader))
+                
         
 
         if self.lr_step == 'epoch':

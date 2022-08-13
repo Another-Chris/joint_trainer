@@ -1,0 +1,6 @@
+model: ResNetSE34V2
+log_input: True 
+encoder_type: ASP 
+n_mels: 64 
+trainfunc: softmaxproto 
+eval_frames: 400

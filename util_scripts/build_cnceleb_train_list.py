@@ -13,19 +13,25 @@ def write(files, lines):
 
         signal, sr = sf.read(file)
         
-        if 'concat' in file:
-            continue
-        
         if len(signal) // sr < 5:
             continue
         
         label = re.findall(r'(id\d+)', file)[0]
+        
+        if label not in dev_list:
+            continue
+        
         file = file.replace('../data/cnceleb/data\\', '')
         lines.append(f'{label} {file}\n')
             
 
 files = glob.glob('../data/cnceleb/data/*/*.flac')
 
+dev_list = []
+with open("../data/cnceleb/dev/dev.lst") as f:
+    for line in f:
+        dev_list.append(line.strip())
+        
 
 if __name__ == '__main__':
     manager = multiprocessing.Manager()

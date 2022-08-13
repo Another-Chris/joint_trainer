@@ -2,6 +2,7 @@
 # -*- encoding: utf-8 -*-
 # Adapted from https://github.com/wujiyang/Face_Pytorch (Apache License)
 
+from tkinter import EXCEPTION
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -49,6 +50,8 @@ class LossFunction(nn.Module):
 
         #one_hot = torch.zeros(cosine.size(), device='cuda' if torch.cuda.is_available() else 'cpu')
         one_hot = torch.zeros_like(cosine)
+        label = label.long()
+        
         one_hot.scatter_(1, label.view(-1, 1), 1)
         output = (one_hot * phi) + ((1.0 - one_hot) * cosine)
         output = output * self.s

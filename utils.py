@@ -76,6 +76,23 @@ def get_args():
     parser.add_argument('--trainfunc', type=str,
                         default='', help='loss function')
 
+    parser.add_argument('--supervised_loss', type=str, default='',
+                        help='supervised loss, used only for joint training')
+    parser.add_argument('--ssl_loss', type=str, default='',
+                        help='ssl loss, used only for joint training')
+    parser.add_argument('--training_mode', default='ssl', type=str,
+                        help='training mode. available: ssl, joint, supervised')
+    
+    parser.add_argument('--ssl_path', default='./data/cnceleb/data', type=str,
+                        help='only for joint training. data for ssl')
+    parser.add_argument('--sup_path', default='./data/voxceleb2', type=str,
+                        help='only for joint training. data for sup')
+    parser.add_argument('--ssl_list', default='./data/train_list_cnceleb.txt', type=str,
+                        help='only for joint training. train list for ssl')
+    parser.add_argument('--sup_list', default='./data/train_list.txt', type=str,
+                        help='only for joint training. train list for sup')
+    
+
     # optimizer
     parser.add_argument('--optimizer', type=str,
                         default='adam', help='sgd or adam')
@@ -146,10 +163,6 @@ def get_args():
     # for test only
     parser.add_argument('--eval', dest='eval',
                         action='store_true', help='Eval only')
-
-    # distributed and mixed precision training
-    parser.add_argument('--mixedprec', dest='mixedprec',
-                        action='store_true', help='Enable mixed precision training')
 
     parser.add_argument('--experiment_name', type=str,
                         help='experiment name', dest='experiment_name')

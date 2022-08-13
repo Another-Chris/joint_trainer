@@ -12,16 +12,26 @@ def write(files, lines):
     for file in tqdm(files):
 
         signal, sr = sf.read(file)
+        
         if len(signal) // sr < 5:
             continue
         
         label = re.findall(r'(id\d+)', file)[0]
+        
+        if label not in dev_list:
+            continue
+        
         file = file.replace('../data/cnceleb/data\\', '')
         lines.append(f'{label} {file}\n')
             
 
 files = glob.glob('../data/cnceleb/data/*/*.flac')
 
+dev_list = []
+with open("../data/cnceleb/dev/dev.lst") as f:
+    for line in f:
+        dev_list.append(line.strip())
+        
 
 if __name__ == '__main__':
     manager = multiprocessing.Manager()
@@ -43,6 +53,6 @@ if __name__ == '__main__':
     if os.path.exists('../data/train_list_cnceleb.txt'):
         os.unlink('../data/train_list_cnceleb.txt')
         
-    with open('../data/train_list_cnceleb.txt', 'w') as f:
+    with open('../data/train_list_cnceleb_2.txt', 'w') as f:
         for line in lines:
             f.write(line)

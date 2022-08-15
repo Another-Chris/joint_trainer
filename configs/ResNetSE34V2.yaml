@@ -1,6 +1,9 @@
 model: ResNetSE34V2
+initial_model: "./pre_trained/ResNetSE34V2.model"
 log_input: True 
 encoder_type: ASP 
-n_mels: 64 
-trainfunc: softmaxproto 
+n_mels: 64  
 eval_frames: 400
+sup_loss: softmaxproto
+batch_size: 32
+nPerSpeaker: 2

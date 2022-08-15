@@ -1,11 +1,13 @@
 model: RawNet3
+initial_model: "./pre_trained/RawNet3.pt"
 encoder_type: ECA
 nOut: 256
 sinc_stride: 10
 max_frames: 300
 eval_frames: 400
-max_seg_per_spk: 500
-trainfunc: subConLoss
 lr_decay: 0.75
 weight_decay: 5e-05
+max_seg_per_spk: 500
 augment: True
+sup_loss: aamsoftmax
+batch_size: 16

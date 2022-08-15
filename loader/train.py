@@ -68,7 +68,7 @@ class ssl_dataset_loader(TrainLoader):
     def __getitem__(self, idx):
 
         segs, augs = [], []
-        for _ in range(self.nPerSpeaker):
+        for _ in range(2):
             seg = load_wav(
                 self.data_list[idx], self.max_frames, evalmode=False)
             
@@ -81,7 +81,7 @@ class ssl_dataset_loader(TrainLoader):
 class train_dataset_loader(TrainLoader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        print(f'train dataset train list: {self.train_list}')
+        print(f'sup dataset train list: {self.train_list}')
 
     def __getitem__(self, indices):
 

@@ -1,4 +1,3 @@
-from torch.utils.tensorboard import SummaryWriter
 from utils import get_args
 from tuneThreshold import *
 from trainer.JointTrainer import JointTrainer
@@ -7,12 +6,13 @@ from trainer import *
 
 import glob
 import os
-import shutil
 import datetime
 import os.path
 import sys
 import zipfile
-
+import subprocess
+import re
+import json
 import torch.cuda
 import torch
 torch.cuda.empty_cache()
@@ -21,16 +21,6 @@ torch.cuda.empty_cache()
 args = get_args()
 
 
-def evaluate(trainer):
-    sc, lab, _ = trainer.evaluateFromList(**vars(args))
-
-    _, eer, _, _ = tuneThresholdfromScore(sc, lab, [1, 0.1])
-
-    fnrs, fprs, thresholds = ComputeErrorRates(sc, lab)
-    mindcf, _ = ComputeMinDcf(fnrs, fprs, thresholds, args.dcf_p_target, args.dcf_c_miss,
-                              args.dcf_c_fa)
-
-    return eer, mindcf
 
 
 def save_scripts():
@@ -51,10 +41,38 @@ def save_scripts():
         f.write('%s' % args)
 
 
+def get_command(it):
+    args.epoch = it
+    args_dict = vars(args)
+    command = []
+    for key, val in args_dict.items():
+        command.append(
+            f"--{key} {val}"
+        )
+    command = " ".join(command)
+    return command
+
+def evaluate(it):
+    command = get_command(it)
+    o = subprocess.call(
+        ['powershell.exe', f"python eval.py {command}"])
+    if o != 0:
+        raise Exception('call eval.py fail')
+    eer, mindcf = read_eval(it)
+    return eer, mindcf
+
+def read_eval(it):
+    with open(f"{args.save_path}/result/epoch_{it}.json", 'r') as f:
+        obj = json.loads(f.read())
+
+    return obj['EER'], obj['minDCF']
+
+
 def get_ssl_loader(train_list=None, train_path=None):
     if train_list is not None and train_path is not None:
         args.train_list = train_list
         args.train_path = train_path
+
     train_dataset = ssl_dataset_loader(**vars(args))
     train_loader = torch.utils.data.DataLoader(
         train_dataset,
@@ -96,29 +114,17 @@ def inf_train_gen(loader):
 
 def main_worker(args):
 
-    ############### load models ###############
+    ssl_loader = get_ssl_loader(
+        train_list=args.ssl_list, train_path=args.ssl_path
+    )
+    ssl_gen = inf_train_gen(ssl_loader)
 
-    if args.training_mode == 'ssl':
-        train_loader = get_ssl_loader()
-        trainer = SSLTrainer(**vars(args))
-
-    elif args.training_mode == 'joint':
-        train_loader = get_ssl_loader(
-            train_list=args.ssl_list, train_path=args.ssl_path
-        )
-        sup_loader = get_sup_loader(
-            train_list=args.sup_list, train_path=args.sup_path
-        )
-        sup_gen = inf_train_gen(sup_loader)
-        ssl_gen = inf_train_gen(train_loader)
-        trainer = JointTrainer(supervised_gen=sup_gen, ssl_gen = ssl_gen, **vars(args))
-
-    elif args.training_mode == 'supervised':
-        train_loader = get_sup_loader()
-        trainer = SupervisedTrainer(**vars(args))
-
-    else:
-        raise ValueError("please specify a valid training mode")
+    sup_loader = get_sup_loader(
+        train_list=args.sup_list, train_path=args.sup_path
+    )
+    sup_gen = inf_train_gen(sup_loader)
+    trainer = JointTrainer(supervised_gen=sup_gen,
+                           ssl_gen=ssl_gen, **vars(args))
 
     # either load the initial_model or read the previous model files
     it = 1
@@ -143,40 +149,33 @@ def main_worker(args):
     # evaluation code
     # this is a separate command, not during training.
     if args.eval == True:
-        pytorch_total_params = sum(p.numel()
-                                   for p in trainer.__model__.parameters())
+        pytorch_total_params = sum(p.numel() for p in trainer.encoder.parameters())
 
         print('total params: ', pytorch_total_params)
         print('Test list: ', args.test_list)
 
-        eer, mindcf = evaluate(trainer)
+        eer, mindcf = evaluate(10)
 
         print(f'eer: {eer:.4f}, minDCF: {mindcf:4f}')
 
         return
 
     # core training script
-    print(f'training model: {args.training_mode}')
     for it in range(it, args.max_epoch + 1):
-        print(f'epoch {it}')
+        print(f'epoch {it}, exp: {args.experiment_name}')
         # train_network: iterate through all the data
-        loss = trainer.train_network(train_loader, it - 1)
-        clr = 0
+        loss = trainer.train_network('', it - 1)
+        clr = trainer.scheduler.get_last_lr()[0]
 
-        if args.training_mode == 'joint':
-            loss_total, loss_ssl, loss_sup = loss
-            trainer.writer.add_scalar('epoch/loss_total', loss_total, it)
-            trainer.writer.add_scalar('epoch/loss_ssl', loss_ssl, it)
-            trainer.writer.add_scalar('epoch/loss_sup', loss_sup, it)
-            print(
-                f'Epoch {it}, {loss_total = :.2f}, {loss_ssl = :.2f} {loss_sup = :.2f} {clr = :.8f}')
-
-        else:
-            trainer.writer.add_scalar('epoch/loss', loss, it)
-            print(f'Epoch {it}, {loss = :.2f} {clr = :.8f}')
+        loss_total, loss_ssl, loss_sup = loss
+        trainer.writer.add_scalar('epoch/loss_total', loss_total, it)
+        trainer.writer.add_scalar('epoch/loss_ssl', loss_ssl, it)
+        trainer.writer.add_scalar('epoch/loss_sup', loss_sup, it)
+        print(
+            f'Epoch {it}, {loss_total = :.2f}, {loss_ssl = :.2f} {loss_sup = :.2f} {clr = :.8f}')
 
         if it % args.test_interval == 0:
-            eer, mindcf = evaluate(trainer)
+            eer, mindcf = evaluate(it)
 
             print(f'\n Epoch {it}, VEER {eer:.4f}, MinDCF: {mindcf:.5f}')
 
@@ -185,6 +184,7 @@ def main_worker(args):
 
             save_scripts()
             trainer.writer.add_scalar('Eval/EER', eer, it)
+            trainer.writer.add_scalar('Eval/MinDCF', mindcf, it)
 
 
 def main():
@@ -201,6 +201,7 @@ def main():
     print(f"Pytorch version: {torch.__version__}")
     print(f"Number of GPUs: {torch.cuda.device_count()}")
     print(f"Save path: {args.save_path}")
+    print(f"{args.batch_size = }")
 
     main_worker(args)
 

@@ -11,13 +11,14 @@ import torch.nn as nn
 class LossFunction(nn.Module):
     """Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
     It also supports the unsupervised contrastive loss in SimCLR"""
+
     def __init__(self, temperature=0.07, contrast_mode='all',
                  base_temperature=0.07, **kwargs):
         super(LossFunction, self).__init__()
         self.temperature = temperature
         self.contrast_mode = contrast_mode
         self.base_temperature = base_temperature
-        self.test_normalize = True # normalize the embeddings 
+        self.test_normalize = True  # normalize the embeddings
         print("initialize supConLoss")
 
     def forward(self, features, labels=None, mask=None):
@@ -51,17 +52,22 @@ class LossFunction(nn.Module):
         elif labels is not None:
             labels = labels.contiguous().view(-1, 1)
             if labels.shape[0] != batch_size:
-                raise ValueError('Num of labels does not match num of features')
+                raise ValueError(
+                    'Num of labels does not match num of features')
             mask = torch.eq(labels, labels.T).float().to(device)
         else:
             mask = mask.float().to(device)
 
-        contrast_count = features.shape[1]
+        contrast_count = features.shape[1]  # views
+        # take dim1 out and concat them into a batch
         contrast_feature = torch.cat(torch.unbind(features, dim=1), dim=0)
+        # contrast_feature.shape = (bz * views, embed)
+
         if self.contrast_mode == 'one':
             anchor_feature = features[:, 0]
             anchor_count = 1
         elif self.contrast_mode == 'all':
+            # anchor == contrastive
             anchor_feature = contrast_feature
             anchor_count = contrast_count
         else:

@@ -73,15 +73,15 @@ def get_args():
                         help='Test and save every [test_interval] epochs')
     parser.add_argument('--max-epoch', type=int, default=500,
                         help='Maximum number of epochs')
-    parser.add_argument('--trainfunc', type=str,
-                        default='', help='loss function')
+    parser.add_argument('--epoch', type=int, default=10,
+                        help='eval only, num of the current epoch')
+    # parser.add_argument('--trainfunc', type=str,
+    #                     default='', help='loss function')
 
-    parser.add_argument('--supervised_loss', type=str, default='',
+    parser.add_argument('--sup_loss', type=str, default='',
                         help='supervised loss, used only for joint training')
     parser.add_argument('--ssl_loss', type=str, default='',
                         help='ssl loss, used only for joint training')
-    parser.add_argument('--training_mode', default='ssl', type=str,
-                        help='training mode. available: ssl, joint, supervised')
     
     parser.add_argument('--ssl_path', default='./data/cnceleb/data', type=str,
                         help='only for joint training. data for ssl')
@@ -151,7 +151,7 @@ def get_args():
                         help='Number of mel filterbanks')
     parser.add_argument('--log_input', type=bool,
                         default=False, help='log input features')
-    parser.add_argument('--model', type=str, default='',
+    parser.add_argument('--model', type=str, default='ResNetSE34L',
                         help='Name of model definition')
     parser.add_argument('--encoder_type', type=str,
                         default='SAP', help='Type of encoder')
@@ -163,11 +163,14 @@ def get_args():
     # for test only
     parser.add_argument('--eval', dest='eval',
                         action='store_true', help='Eval only')
+    
+    parser.add_argument('--num_eval', dest='num_eval',
+                        default = 10, help='number of eval segments')
 
     parser.add_argument('--experiment_name', type=str,
                         help='experiment name', dest='experiment_name')
 
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     # parse YAML
     def find_option_type(key, parser):

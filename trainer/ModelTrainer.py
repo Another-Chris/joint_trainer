@@ -57,7 +57,7 @@ class ModelTrainer(object):
             setfiles, test_path, num_eval=num_eval, **kwargs)
 
         test_loader = torch.utils.data.DataLoader(
-            test_dataset, batch_size=1, shuffle=False, num_workers=nDataLoaderThread, drop_last=False, sampler=None)
+            test_dataset, batch_size=1, shuffle=False, num_workers=6, drop_last=False, sampler=None)
 
         ########## extract features ##########
         print('--- extract features ---')

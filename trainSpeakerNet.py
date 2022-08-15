@@ -19,7 +19,6 @@ torch.cuda.empty_cache()
 
 
 args = get_args()
-logdir = f'./logs/{args.experiment_name}'
 
 
 def evaluate(trainer):
@@ -96,7 +95,6 @@ def inf_train_gen(loader):
 
 
 def main_worker(args):
-    writer = SummaryWriter(logdir)
 
     ############### load models ###############
 
@@ -112,7 +110,8 @@ def main_worker(args):
             train_list=args.sup_list, train_path=args.sup_path
         )
         sup_gen = inf_train_gen(sup_loader)
-        trainer = JointTrainer(supervised_gen=sup_gen, **vars(args))
+        ssl_gen = inf_train_gen(train_loader)
+        trainer = JointTrainer(supervised_gen=sup_gen, ssl_gen = ssl_gen, **vars(args))
 
     elif args.training_mode == 'supervised':
         train_loader = get_sup_loader()
@@ -139,7 +138,7 @@ def main_worker(args):
                 os.path.basename(modelfiles[-1]))[0][5:]) + 1
 
     for _ in range(1, it):
-        trainer.__scheduler__.step()
+        trainer.scheduler.step()
 
     # evaluation code
     # this is a separate command, not during training.
@@ -161,20 +160,19 @@ def main_worker(args):
     for it in range(it, args.max_epoch + 1):
         print(f'epoch {it}')
         # train_network: iterate through all the data
-        loss = trainer.train_network(train_loader, it)
+        loss = trainer.train_network(train_loader, it - 1)
+        clr = 0
 
         if args.training_mode == 'joint':
             loss_total, loss_ssl, loss_sup = loss
-            writer.add_scalar('loss_total/Train', loss_total, it)
-            writer.add_scalar('loss_ssl/Train', loss_ssl, it)
-            writer.add_scalar('loss_sup/Train', loss_sup, it)
-            clr = trainer.__scheduler__.get_last_lr()[0]
+            trainer.writer.add_scalar('epoch/loss_total', loss_total, it)
+            trainer.writer.add_scalar('epoch/loss_ssl', loss_ssl, it)
+            trainer.writer.add_scalar('epoch/loss_sup', loss_sup, it)
             print(
                 f'Epoch {it}, {loss_total = :.2f}, {loss_ssl = :.2f} {loss_sup = :.2f} {clr = :.8f}')
 
         else:
-            clr = trainer.__scheduler__.get_last_lr()[0]
-            writer.add_scalar('Loss/Train', loss, it)
+            trainer.writer.add_scalar('epoch/loss', loss, it)
             print(f'Epoch {it}, {loss = :.2f} {clr = :.8f}')
 
         if it % args.test_interval == 0:
@@ -186,12 +184,10 @@ def main_worker(args):
             trainer.saveParameters(mpath)
 
             save_scripts()
-            writer.add_scalar('EER/Eval', eer, it)
+            trainer.writer.add_scalar('Eval/EER', eer, it)
 
 
 def main():
-    if os.path.exists(logdir):
-        shutil.rmtree(logdir)
 
     args.model_save_path = args.save_path + "/model"
     args.result_save_path = args.save_path + "/result"

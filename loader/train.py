@@ -67,14 +67,15 @@ class ssl_dataset_loader(TrainLoader):
 
     def __getitem__(self, idx):
 
-        segs = []
+        segs, augs = [], []
         for _ in range(self.nPerSpeaker):
             seg = load_wav(
                 self.data_list[idx], self.max_frames, evalmode=False)
-            seg = self.augment_audio(seg)
-            segs.append(torch.FloatTensor(seg))
+            
+            # segs.append(torch.FloatTensor(seg))
+            augs.append(torch.FloatTensor(self.augment_audio(seg)))
 
-        return segs, self.data_label[idx]
+        return segs + augs, self.data_label[idx]
 
 
 class train_dataset_loader(TrainLoader):

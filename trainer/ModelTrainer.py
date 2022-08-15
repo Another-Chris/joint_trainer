@@ -3,6 +3,7 @@ import numpy as np
 from loader import test_dataset_loader
 from .utils import save_features
 from .ModelWithHead import ModelWithHead
+from torch.utils.tensorboard import SummaryWriter
 import torch.nn.functional as F
 import importlib
 import random
@@ -10,26 +11,28 @@ import torch
 import re
 import itertools
 import sys
+import time
 sys.path.append("..")
 
 
 class ModelTrainer(object):
-    def __init__(self, model, optimizer, scheduler, nPerSpeaker, **kwargs):
+    def __init__(self, nPerSpeaker, model, scheduler, optimizer,  **kwargs):
 
-        model_fn = importlib.import_module('models.' + model).__getattribute__('MainModel')
+        # model_fn = importlib.import_module('models.' + model).__getattribute__('MainModel')
 
-        self.encoder = model_fn(**kwargs) # embeddings
-        self.encoder_with_head = ModelWithHead(self.encoder, dim_in=kwargs['nOut'], head='mlp') # projections with head
+        # self.encoder = model_fn(**kwargs) # embeddings
+        # self.encoder_with_head = ModelWithHead(self.encoder, dim_in=kwargs['nOut'], head='mlp') # projections with head
 
-        Optimizer = importlib.import_module('optimizer.' + optimizer).__getattribute__('Optimizer')
-        self.__optimizer__ = Optimizer(self.encoder_with_head.parameters(), **kwargs)
-
-        Scheduler = importlib.import_module('scheduler.' + scheduler).__getattribute__('Scheduler')
-        self.__scheduler__, self.lr_step = Scheduler(self.__optimizer__, **kwargs)
+        # Optimizer = importlib.import_module('optimizer.' + optimizer).__getattribute__('Optimizer')
+        # self.__optimizer__ = Optimizer(self.encoder_with_head.parameters(), **kwargs)
 
         self.nPerSpeaker = nPerSpeaker
+        self.model = model 
+        self.scheduler = scheduler
+        self.optimizer = optimizer
 
-        assert self.lr_step in ['epoch', 'iteration']
+        self.writer = SummaryWriter(log_dir=f"./logs/{self.model}/{time.time()}")
+
 
     def evaluateFromList(self, test_list, test_path, nDataLoaderThread, num_eval=10, feat_save_path='.', **kwargs):
 

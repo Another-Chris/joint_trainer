@@ -114,6 +114,7 @@ class JointTrainer(ModelTrainer):
             sup_loss_val = self.train_sup()
             ssl_loss_val = self.train_ssl()
             
+            
             # # scale the loss
             # if sup_loss_val > ssl_loss_val:
             #     lamb = torch.div(sup_loss_val, ssl_loss_val, rounding_mode='trunc') 
@@ -148,8 +149,6 @@ class JointTrainer(ModelTrainer):
             ssl_loss += ssl_loss_val
             sup_loss += sup_loss_val
             
-            break
-
         if self.lr_step == 'epoch':
             self.scheduler.step()
 

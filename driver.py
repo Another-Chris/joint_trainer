@@ -16,8 +16,9 @@ BASE_ARGS = [
     ("--test_path", "data/cnceleb/eval"),
     ("--test_list", "data/test_list_cnceleb.txt"),
     ("--nDataLoaderThread", "2"),
-    ("--max-epoch", "10"),
-    ("--eval", "")
+    ("--max-epoch", "20"),
+    ("--test_interval", "20")
+    # ("--eval", "")
 ]
 
 
@@ -35,6 +36,9 @@ def create_command(config, ssl_loss):
 
 configs = glob.glob("./configs/*")
 ssl_losses = ["subConLoss", "angleproto"]
+
+ssl_losses = ['softmaxproto', 'angleproto', 'aamsoftmax']
+
 commands = []
 print('=== will ran the following experiments ===')
 for config in configs:
@@ -42,7 +46,6 @@ for config in configs:
         commands.append(create_command(config, ssl_loss))
 print('======')
 
-for command in commands[3:]:
+for command in commands:
     torch.cuda.empty_cache()
     subprocess.call(['powershell.exe', f"python trainSpeakerNet.py {command}"])
-    break

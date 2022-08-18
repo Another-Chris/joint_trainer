@@ -20,6 +20,16 @@ torch.cuda.empty_cache()
 
 args = get_args()
 
+def evaluate(trainer):
+    sc, lab, _ = trainer.evaluateFromList(**vars(args))
+
+    _, eer, _, _ = tuneThresholdfromScore(sc, lab, [1, 0.1])
+
+    fnrs, fprs, thresholds = ComputeErrorRates(sc, lab)
+    mindcf, _ = ComputeMinDcf(fnrs, fprs, thresholds, args.dcf_p_target, args.dcf_c_miss,
+                              args.dcf_c_fa)
+
+    return eer, mindcf
 
 
 
@@ -40,32 +50,6 @@ def save_scripts():
     with open(args.result_save_path + '/run%s.cmd' % strtime, 'w') as f:
         f.write('%s' % args)
 
-
-def get_command(it):
-    args.epoch = it
-    args_dict = vars(args)
-    command = []
-    for key, val in args_dict.items():
-        command.append(
-            f"--{key} {val}"
-        )
-    command = " ".join(command)
-    return command
-
-def evaluate(it):
-    command = get_command(it)
-    o = subprocess.call(
-        ['powershell.exe', f"python eval.py {command}"])
-    if o != 0:
-        raise Exception('call eval.py fail')
-    eer, mindcf = read_eval(it)
-    return eer, mindcf
-
-def read_eval(it):
-    with open(f"{args.save_path}/result/epoch_{it}.json", 'r') as f:
-        obj = json.loads(f.read())
-
-    return obj['EER'], obj['minDCF']
 
 
 def get_ssl_loader(train_list=None, train_path=None):
@@ -129,7 +113,7 @@ def main_worker(args):
     # either load the initial_model or read the previous model files
     it = 1
     if (args.initial_model != ''):
-        trainer.loadParameters(args.initial_model)
+        trainer.encoder.load_state_dict(torch.load(args.initial_model))
         print('model {} loaded!'.format(args.initial_model))
 
     # restart training
@@ -154,7 +138,7 @@ def main_worker(args):
         print('total params: ', pytorch_total_params)
         print('Test list: ', args.test_list)
 
-        eer, mindcf = evaluate(10)
+        eer, mindcf = evaluate(trainer)
 
         print(f'eer: {eer:.4f}, minDCF: {mindcf:4f}')
 
@@ -175,7 +159,7 @@ def main_worker(args):
             f'Epoch {it}, {loss_total = :.2f}, {loss_ssl = :.2f} {loss_sup = :.2f} {clr = :.8f}')
 
         if it % args.test_interval == 0:
-            eer, mindcf = evaluate(it)
+            eer, mindcf = evaluate(trainer)
 
             print(f'\n Epoch {it}, VEER {eer:.4f}, MinDCF: {mindcf:.5f}')
 

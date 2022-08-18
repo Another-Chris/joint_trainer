@@ -1,6 +1,6 @@
 import ssl
 from .ModelWithHead import ModelWithHead
-from models import ResNetSE34L
+from models import ResNetSE34L,DomainAdaptor
 from loss import AngleProtoLoss, SubConLoss
 from .ModelTrainer import ModelTrainer
 from tqdm import tqdm
@@ -8,9 +8,88 @@ import torch.optim as optim
 import torch
 import sys
 import importlib
+import torch.nn.functional as F
+import torch.nn as nn
 
 sys.path.append('..')
 
+
+class Composer(nn.Module):
+    def __init__(self, nOut, supervised_gen, ssl_gen, **kwargs) -> None:
+        super().__init__()
+        ModelFn = importlib.import_module('models.' + self.model).__getattribute__('MainModel')
+        self.encoder = ModelFn(nOut = nOut, **kwargs)
+        self.ssl_model = ModelWithHead(self.encoder, dim_in=nOut, feat_dim =nOut, head = 'mlp')
+        self.sup_model = ModelWithHead(self.encoder, dim_in=nOut, feat_dim= nOut, head = 'mlp')
+        self.domain_adaptor = DomainAdaptor(in_dim = 2 * nOut)
+        self.supervised_gen = supervised_gen
+        self.ssl_gen = ssl_gen
+        self.nOut = nOut
+        self.put_to_device()
+        
+
+    def put_to_device(self):
+        device = torch.device('cuda')
+        self.ssl_model.to(device)
+        self.sup_model.to(device)
+        self.ssl_loss.to(device)
+        self.sup_loss.to(device)
+        self.domain_adaptor.to(device)
+
+    def train_ssl(self):
+        data, _ = next(self.ssl_gen)
+        data = torch.cat([d for d in data], dim=0)
+
+        data = data.squeeze(1).cuda()
+        outp = self.ssl_model(data)
+        outp = outp.reshape(2, -1, outp.size()[-1]).transpose(1, 0).squeeze(1)        
+        
+        loss = self.ssl_loss(outp)
+        
+        if type(loss) == tuple:
+            loss = loss[0]
+
+        return loss, outp
+
+    def train_sup(self):
+        data, label = next(self.supervised_gen)
+
+        data = data.transpose(1, 0)
+        data = data.reshape(-1, data.size()[-1]).cuda()
+
+        label = label.long().cuda()
+
+        outp = self.sup_model(data)
+
+        # if some dim has more than 1 cols, squeeze has no use
+        outp = outp.reshape(self.nPerSpeaker, -1,
+                            outp.size()[-1]).transpose(1, 0).squeeze(1)
+        loss = self.sup_loss(outp, label)
+       
+        if type(loss) == tuple:
+            loss = loss[0]
+
+        return loss, outp
+        
+    def train(self):
+        sup_loss_val, sup_embed = self.train_sup()
+        ssl_loss_val, ssl_embed = self.train_ssl()
+        
+        diff_lan = []
+        for v1 in range(sup_embed.size()[1]):
+            for v2 in range(ssl_embed.size()[1]):
+                diff_lan.append(
+                    torch.cat([sup_embed[:, v1, :], ssl_embed[:, v2, :]], axis = -1)
+                )
+        same_lan = torch.cat([sup_embed.reshape(sup_embed.size()[0], -1),ssl_embed.reshape(ssl_embed.size()[0], -1)], dim = 0)
+        diff_lan = torch.cat(diff_lan, dim = 0)
+        
+        concats = torch.cat([diff_lan, same_lan], dim = 0)
+        bce_label = torch.cat([torch.ones(size = (diff_lan.size()[0], 1)), torch.zeros(size = (same_lan.size()[0], 1))]).cuda()
+        bce_input = self.domain_adaptor(concats)
+        bce_loss_val = F.binary_cross_entropy(bce_input, bce_label)
+                        
+        return ssl_loss_val, sup_loss_val, bce_loss_val
 
 class JointTrainer(ModelTrainer):
     def __init__(
@@ -37,13 +116,15 @@ class JointTrainer(ModelTrainer):
 
         self.ssl_model = ModelWithHead(self.encoder, dim_in=nOut, feat_dim =nOut, head = 'mlp')
         self.sup_model = ModelWithHead(self.encoder, dim_in=nOut, feat_dim= nOut, head = 'mlp')
+        self.domain_adaptor = DomainAdaptor(in_dim = 2 * nOut)
         
         # optimizer
         Optim = importlib.import_module('optimizer.' + self.optimizer).__getattribute__('Optimizer')
         self.optim = Optim(
             list(self.encoder.parameters()) + 
             list(self.sup_model.head.parameters()) + 
-            list(self.ssl_model.head.parameters()), 
+            list(self.ssl_model.head.parameters()) + 
+            list(self.domain_adaptor.parameters()),
             lr = kwargs['lr'], 
             weight_decay = kwargs['weight_decay'])
         
@@ -63,6 +144,7 @@ class JointTrainer(ModelTrainer):
         self.sup_model.to(device)
         self.ssl_loss.to(device)
         self.sup_loss.to(device)
+        self.domain_adaptor.to(device)
 
     def train_ssl(self):
         data, _ = next(self.ssl_gen)
@@ -72,32 +154,32 @@ class JointTrainer(ModelTrainer):
         outp = self.ssl_model(data)
         outp = outp.reshape(2, -1, outp.size()[-1]).transpose(1, 0).squeeze(1)        
         
-        ssl_loss_val = self.ssl_loss(outp)
+        loss = self.ssl_loss(outp)
         
-        if type(ssl_loss_val) == tuple:
-            ssl_loss_val = ssl_loss_val[0]
+        if type(loss) == tuple:
+            loss = loss[0]
 
-        return ssl_loss_val
+        return loss, outp
 
     def train_sup(self):
-        sup_data, sup_label = next(self.supervised_gen)
+        data, label = next(self.supervised_gen)
 
-        sup_data = sup_data.transpose(1, 0)
-        sup_data = sup_data.reshape(-1, sup_data.size()[-1]).cuda()
+        data = data.transpose(1, 0)
+        data = data.reshape(-1, data.size()[-1]).cuda()
 
-        sup_label = sup_label.long().cuda()
+        label = label.long().cuda()
 
-        outp = self.sup_model(sup_data)
+        outp = self.sup_model(data)
 
         # if some dim has more than 1 cols, squeeze has no use
         outp = outp.reshape(self.nPerSpeaker, -1,
                             outp.size()[-1]).transpose(1, 0).squeeze(1)
-        sup_loss_val = self.sup_loss(outp, sup_label)
+        loss = self.sup_loss(outp, label)
        
-        if type(sup_loss_val) == tuple:
-            sup_loss_val = sup_loss_val[0]
+        if type(loss) == tuple:
+            loss = loss[0]
 
-        return sup_loss_val
+        return loss, outp
 
     def train_network(self, loader = None, epoch=None):
 
@@ -111,19 +193,25 @@ class JointTrainer(ModelTrainer):
 
         pbar = tqdm(range(steps_per_epoch))
         for step in pbar:
-            sup_loss_val = self.train_sup()
-            ssl_loss_val = self.train_ssl()
+            sup_loss_val, sup_embed = self.train_sup()
+            ssl_loss_val, ssl_embed = self.train_ssl()
             
+            diff_lan = []
+            for v1 in range(sup_embed.size()[1]):
+                for v2 in range(ssl_embed.size()[1]):
+                    diff_lan.append(
+                        torch.cat([sup_embed[:, v1, :], ssl_embed[:, v2, :]], axis = -1)
+                    )
+            same_lan = torch.cat([sup_embed.reshape(sup_embed.size()[0], -1),ssl_embed.reshape(ssl_embed.size()[0], -1)], dim = 0)
+            diff_lan = torch.cat(diff_lan, dim = 0)
             
-            # # scale the loss
-            # if sup_loss_val > ssl_loss_val:
-            #     lamb = torch.div(sup_loss_val, ssl_loss_val, rounding_mode='trunc') 
-            #     ssl_loss_val = ssl_loss_val * lamb
-            # else:
-            #     lamb = torch.div(ssl_loss_val, sup_loss_val ,rounding_mode='trunc') 
-            #     sup_loss_val = sup_loss_val * lamb
-                
-            loss = ssl_loss_val + sup_loss_val
+            concats = torch.cat([diff_lan, same_lan], dim = 0)
+            bce_label = torch.cat([torch.ones(size = (diff_lan.size()[0], 1)), torch.zeros(size = (same_lan.size()[0], 1))]).cuda()
+            bce_input = self.domain_adaptor(concats)
+            bce_loss_val = F.binary_cross_entropy(bce_input, bce_label)
+                            
+            loss = ssl_loss_val + sup_loss_val + bce_loss_val
+            
             
             self.optim.zero_grad()
             loss.backward()
@@ -131,7 +219,10 @@ class JointTrainer(ModelTrainer):
 
             ssl_loss_val = ssl_loss_val.detach().cpu()
             sup_loss_val = sup_loss_val.detach().cpu()
-            loss = ssl_loss_val + sup_loss_val
+            bce_loss_val = bce_loss_val.detach().cpu()
+            
+            
+            loss = ssl_loss_val + sup_loss_val + bce_loss_val
 
             self.writer.add_scalar(
                 "step/loss", loss, epoch * steps_per_epoch + step)
@@ -139,9 +230,11 @@ class JointTrainer(ModelTrainer):
                                 epoch * steps_per_epoch + step)
             self.writer.add_scalar("step/sup_loss", sup_loss_val,
                                 epoch * steps_per_epoch + step)
+            self.writer.add_scalar("step/bce_loss", bce_loss_val,
+                                epoch * steps_per_epoch + step)
 
             pbar.set_description(
-                f'{loss = :.3f} {ssl_loss_val =:.3f} {sup_loss_val =:.3f}')
+                f'{loss = :.3f} {ssl_loss_val =:.3f} {sup_loss_val =:.3f} {bce_loss_val = :.3f}')
 
             if self.lr_step == 'iteration':
                 self.scheduler.step(epoch + step / len(loader))
@@ -154,3 +247,12 @@ class JointTrainer(ModelTrainer):
 
         step+=1
         return (ssl_loss + sup_loss) / step, ssl_loss / step, sup_loss / step
+    
+    
+# # scale the loss
+# if sup_loss_val > ssl_loss_val:
+#     lamb = torch.div(sup_loss_val, ssl_loss_val, rounding_mode='trunc') 
+#     ssl_loss_val = ssl_loss_val * lamb
+# else:
+#     lamb = torch.div(ssl_loss_val, sup_loss_val ,rounding_mode='trunc') 
+#     sup_loss_val = sup_loss_val * lamb

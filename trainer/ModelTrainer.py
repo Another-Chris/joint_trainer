@@ -39,13 +39,13 @@ def compute_one_score(all_scores, all_labels, all_trials, line, feats, num_eval)
     all_trials.append(data[1] + " " + data[2])
 
 class ModelTrainer(object):
-    def __init__(self, nPerSpeaker, model, scheduler, optimizer,  **kwargs):
+    def __init__(self, nPerSpeaker, scheduler, model, optimizer,  **kwargs):
 
         self.nPerSpeaker = nPerSpeaker
-        self.model = model 
         self.scheduler = scheduler
         self.optimizer = optimizer
-
+        self.model = model
+        
         self.writer = SummaryWriter(log_dir=f"./logs/{self.model}/{time.time()}")
 
 
@@ -90,7 +90,7 @@ class ModelTrainer(object):
         all_labels = []
         all_trials = []
         
-        Parallel(n_jobs = 8, backend="threading")(
+        Parallel(n_jobs = 4, backend="threading")(
             delayed(compute_one_score)
             (all_scores, all_labels, all_trials, line, feats, num_eval)
             for line in tqdm(lines))

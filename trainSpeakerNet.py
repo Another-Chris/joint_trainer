@@ -64,7 +64,7 @@ def get_ssl_loader(train_list=None, train_path=None):
         num_workers=args.nDataLoaderThread,
         pin_memory=False,
         worker_init_fn=worker_init_fn,
-        drop_last=False,
+        drop_last=True,
         shuffle=True
     )
     return train_loader
@@ -84,7 +84,7 @@ def get_sup_loader(train_list=None, train_path=None):
         num_workers=args.nDataLoaderThread,
         pin_memory=False,
         worker_init_fn=worker_init_fn,
-        drop_last=False,
+        drop_last=True,
         sampler=sup_sampler
     )
     return train_loader

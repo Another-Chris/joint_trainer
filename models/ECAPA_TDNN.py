@@ -164,7 +164,7 @@ class ECAPA_TDNN(nn.Module):
 
         self.conv1 = nn.Conv1d(80, C, kernel_size=5, stride=1, padding=2)
         self.relu = nn.ReLU()
-        self.bn1 = nn.BatchNorm1d()
+        self.bn1 = nn.BatchNorm1d(C)
         
         # C: channel size: does not change
         self.layer1 = Bottle2neck(C, C, kernel_size=3, dilation=2, scale=8)
@@ -228,4 +228,4 @@ class ECAPA_TDNN(nn.Module):
         return x
 
 def MainModel(nOut, **kwargs):
-    return ECAPA_TDNN(1024, nOut = nOut)
+    return ECAPA_TDNN(1024, nOut = 192)

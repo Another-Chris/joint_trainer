@@ -102,39 +102,40 @@ class ModelTrainer(object):
         torch.save(self.encoder.state_dict(), path)
 
     def loadParameters(self, path):
-        self_state = self.encoder.state_dict()
+        self.encoder.load_state_dict(torch.load(path))
+        # self_state = self.encoder.state_dict()
 
-        loaded_state = torch.load(path, map_location="cuda:0")
+        # loaded_state = torch.load(path, map_location="cuda:0")
 
-        if 'model' in loaded_state:
-            loaded_state = loaded_state['model']
+        # if 'model' in loaded_state:
+        #     loaded_state = loaded_state['model']
 
-        if '__S__' in list(loaded_state.keys())[0]:
-            newdict = {}
-            delete_list = []
+        # if '__S__' in list(loaded_state.keys())[0]:
+        #     newdict = {}
+        #     delete_list = []
 
-            for name, param in loaded_state.items():
-                new_name = name.replace('__S__.', '')
-                newdict[new_name] = param
-                delete_list.append(name)
+        #     for name, param in loaded_state.items():
+        #         new_name = name.replace('__S__.', '')
+        #         newdict[new_name] = param
+        #         delete_list.append(name)
 
-            loaded_state.update(newdict)
-            for name in delete_list:
-                del loaded_state[name]
+        #     loaded_state.update(newdict)
+        #     for name in delete_list:
+        #         del loaded_state[name]
 
-        for name, param in loaded_state.items():
-            origname = name
-            if name not in self_state:
-                name = name.replace("module.", "")
+        # for name, param in loaded_state.items():
+        #     origname = name
+        #     if name not in self_state:
+        #         name = name.replace("module.", "")
 
-                if name not in self_state:
-                    print("{} is not in the model.".format(origname))
-                    continue
+        #         if name not in self_state:
+        #             print("{} is not in the model.".format(origname))
+        #             continue
 
-            if self_state[name].size() != loaded_state[origname].size():
-                print("Wrong parameter length: {}, model: {}, loaded: {}".format(
-                    origname, self_state[name].size(), loaded_state[origname].size()))
-                continue
+        #     if self_state[name].size() != loaded_state[origname].size():
+        #         print("Wrong parameter length: {}, model: {}, loaded: {}".format(
+        #             origname, self_state[name].size(), loaded_state[origname].size()))
+        #         continue
 
-            # this is how you load the params
-            self_state[name].copy_(param)
+        #     # this is how you load the params
+        #     self_state[name].copy_(param)

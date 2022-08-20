@@ -17,14 +17,16 @@ class Composer(nn.Module):
         super().__init__()
 
         self.ssl_model = ModelWithHead(encoder, dim_in=nOut, feat_dim =nOut, head = 'mlp')
-        self.sup_model = encoder #because the loss already includes the learnable w and b
+        self.sup_model = ModelWithHead(encoder, dim_in=nOut, feat_dim =nOut, head = 'mlp') #because the loss already includes the learnable w and b
         self.domain_adaptor = DomainAdaptor(in_dim = 2 * nOut)
         
         self.supervised_gen = supervised_gen
         self.ssl_gen = ssl_gen
         self.nOut = nOut
         self.nPerSpeaker = nPerSpeaker
-                
+        print('---')
+        print("loss." + sup_loss)
+        print('---')
         SupLoss = importlib.import_module('loss.' + sup_loss).__getattribute__('LossFunction')
         self.sup_loss = SupLoss(nOut = nOut, temperature = 0.5, **kwargs)
         
@@ -103,7 +105,7 @@ class JointTrainer(ModelTrainer):
 
         # model
         ModelFn = importlib.import_module('models.' + self.model).__getattribute__('MainModel')
-        self.encoder = ModelFn(**kwargs)
+        self.encoder = ModelFn(nOut = nOut, **kwargs)
         self.model = Composer(encoder = self.encoder, nOut = nOut, **kwargs)
         
         # optimizer

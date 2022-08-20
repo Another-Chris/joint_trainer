@@ -16,17 +16,14 @@ class Composer(nn.Module):
     def __init__(self, nOut, supervised_gen, ssl_gen, sup_loss, ssl_loss, encoder, nPerSpeaker, **kwargs) -> None:
         super().__init__()
 
-        self.ssl_model = ModelWithHead(encoder, dim_in=nOut, feat_dim =nOut, head = 'mlp')
-        self.sup_model = ModelWithHead(encoder, dim_in=nOut, feat_dim =nOut, head = 'mlp') #because the loss already includes the learnable w and b
+        self.ssl_model = ModelWithHead(encoder, dim_in=192, feat_dim =nOut, head = 'mlp')
+        self.sup_model = ModelWithHead(encoder, dim_in=192, feat_dim =nOut, head = 'mlp') #because the loss already includes the learnable w and b
         self.domain_adaptor = DomainAdaptor(in_dim = 2 * nOut)
         
         self.supervised_gen = supervised_gen
         self.ssl_gen = ssl_gen
         self.nOut = nOut
         self.nPerSpeaker = nPerSpeaker
-        print('---')
-        print("loss." + sup_loss)
-        print('---')
         SupLoss = importlib.import_module('loss.' + sup_loss).__getattribute__('LossFunction')
         self.sup_loss = SupLoss(nOut = nOut, temperature = 0.5, **kwargs)
         
@@ -83,21 +80,21 @@ class Composer(nn.Module):
         sup_loss_val, sup_embed = self.train_sup()
         ssl_loss_val, ssl_embed = self.train_ssl()
         
-        diff_lan = []
-        for v1 in range(sup_embed.size()[1]):
-            for v2 in range(ssl_embed.size()[1]):
-                diff_lan.append(
-                    torch.cat([sup_embed[:, v1, :], ssl_embed[:, v2, :]], axis = -1)
-                )
-        same_lan = torch.cat([sup_embed.reshape(sup_embed.size()[0], -1),ssl_embed.reshape(ssl_embed.size()[0], -1)], dim = 0)
-        diff_lan = torch.cat(diff_lan, dim = 0)
+        # diff_lan = []
+        # for v1 in range(sup_embed.size()[1]):
+        #     for v2 in range(ssl_embed.size()[1]):
+        #         diff_lan.append(
+        #             torch.cat([sup_embed[:, v1, :], ssl_embed[:, v2, :]], axis = -1)
+        #         )
+        # same_lan = torch.cat([sup_embed.reshape(sup_embed.size()[0], -1),ssl_embed.reshape(ssl_embed.size()[0], -1)], dim = 0)
+        # diff_lan = torch.cat(diff_lan, dim = 0)
         
-        concats = torch.cat([diff_lan, same_lan], dim = 0)
-        bce_label = torch.cat([torch.ones(size = (diff_lan.size()[0], 1)), torch.zeros(size = (same_lan.size()[0], 1))]).cuda()
-        bce_input = self.domain_adaptor(concats)
-        bce_loss_val = F.binary_cross_entropy(bce_input, bce_label)
+        # concats = torch.cat([diff_lan, same_lan], dim = 0)
+        # bce_label = torch.cat([torch.ones(size = (diff_lan.size()[0], 1)), torch.zeros(size = (same_lan.size()[0], 1))]).cuda()
+        # bce_input = self.domain_adaptor(concats)
+        # bce_loss_val = F.binary_cross_entropy(bce_input, bce_label)
                         
-        return ssl_loss_val, sup_loss_val, bce_loss_val
+        return ssl_loss_val, sup_loss_val
 
 class JointTrainer(ModelTrainer):
     def __init__(self, nOut, **kwargs):
@@ -105,7 +102,7 @@ class JointTrainer(ModelTrainer):
 
         # model
         ModelFn = importlib.import_module('models.' + self.model).__getattribute__('MainModel')
-        self.encoder = ModelFn(nOut = nOut, **kwargs)
+        self.encoder = ModelFn()
         self.model = Composer(encoder = self.encoder, nOut = nOut, **kwargs)
         
         # optimizer
@@ -129,8 +126,8 @@ class JointTrainer(ModelTrainer):
 
         pbar = tqdm(range(steps_per_epoch))
         for step in pbar:
-            ssl_loss_val, sup_loss_val, bce_loss_val  = self.model.train()
-            loss = ssl_loss_val + sup_loss_val + bce_loss_val
+            ssl_loss_val, sup_loss_val  = self.model.train()
+            loss = ssl_loss_val + sup_loss_val 
 
             self.optim.zero_grad()
             loss.backward()
@@ -138,9 +135,8 @@ class JointTrainer(ModelTrainer):
 
             ssl_loss_val = ssl_loss_val.detach().cpu()
             sup_loss_val = sup_loss_val.detach().cpu()
-            bce_loss_val = bce_loss_val.detach().cpu()
             
-            loss = ssl_loss_val + sup_loss_val + bce_loss_val
+            loss = ssl_loss_val + sup_loss_val
 
             self.writer.add_scalar(
                 "step/loss", loss, epoch * steps_per_epoch + step)
@@ -148,11 +144,9 @@ class JointTrainer(ModelTrainer):
                                 epoch * steps_per_epoch + step)
             self.writer.add_scalar("step/sup_loss", sup_loss_val,
                                 epoch * steps_per_epoch + step)
-            self.writer.add_scalar("step/bce_loss", bce_loss_val,
-                                epoch * steps_per_epoch + step)
 
             pbar.set_description(
-                f'{loss = :.3f} {ssl_loss_val =:.3f} {sup_loss_val =:.3f} {bce_loss_val = :.8f}')
+                f'{loss = :.3f} {ssl_loss_val =:.3f} {sup_loss_val =:.3f}')
 
             if self.lr_step == 'iteration':
                 self.scheduler.step(epoch + step / len(loader))

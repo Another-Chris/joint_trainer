@@ -78,6 +78,7 @@ class ModelTrainer(object):
         print('--- extract features ---')
         pbar = tqdm(test_loader, total=len(test_loader))
 
+
         for data in pbar:
             inp1 = data[0][0].cuda()
 

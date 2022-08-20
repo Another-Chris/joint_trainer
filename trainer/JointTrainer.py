@@ -125,6 +125,7 @@ class JointTrainer(ModelTrainer):
         sup_loss = 0
         ssl_loss = 0
         steps_per_epoch = 256
+        self.model.train()
 
         pbar = tqdm(range(steps_per_epoch))
         for step in pbar:

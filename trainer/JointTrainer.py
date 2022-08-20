@@ -1,10 +1,8 @@
-import ssl
 from .ModelWithHead import ModelWithHead
-from models import ResNetSE34L,DomainAdaptor
-from loss import AngleProtoLoss, SubConLoss
+from models import DomainAdaptor
 from .ModelTrainer import ModelTrainer
 from tqdm import tqdm
-import torch.optim as optim
+
 import torch
 import sys
 import importlib
@@ -26,7 +24,7 @@ class Composer(nn.Module):
         self.ssl_gen = ssl_gen
         self.nOut = nOut
         self.nPerSpeaker = nPerSpeaker
-        
+                
         SupLoss = importlib.import_module('loss.' + sup_loss).__getattribute__('LossFunction')
         self.sup_loss = SupLoss(nOut = nOut, temperature = 0.5, **kwargs)
         
@@ -105,7 +103,7 @@ class JointTrainer(ModelTrainer):
 
         # model
         ModelFn = importlib.import_module('models.' + self.model).__getattribute__('MainModel')
-        self.encoder = ModelFn(nOut = nOut, **kwargs)
+        self.encoder = ModelFn(**kwargs)
         self.model = Composer(encoder = self.encoder, nOut = nOut, **kwargs)
         
         # optimizer

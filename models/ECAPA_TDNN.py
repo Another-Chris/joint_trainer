@@ -142,8 +142,9 @@ class FbankAug(nn.Module):
 
 
 class ECAPA_TDNN(nn.Module):
-    def __init__(self, C) -> None:
+    def __init__(self, C, nOut) -> None:
         super().__init__()
+        print('initialize ECAPA_TDNN')
 
         self.torchfbank = torch.nn.Sequential(
             PreEmphasis(),
@@ -181,8 +182,8 @@ class ECAPA_TDNN(nn.Module):
         )
 
         self.bn5 = nn.BatchNorm1d(3072)
-        self.fc6 = nn.Linear(3072, 192)
-        self.bn6 = nn.BatchNorm1d(192)
+        self.fc6 = nn.Linear(3072, nOut)
+        self.bn6 = nn.BatchNorm1d(nOut)
 
     def forward(self, x, aug):
         with torch.no_grad():
@@ -225,3 +226,6 @@ class ECAPA_TDNN(nn.Module):
         x = self.fc6(x)
         x = self.bn6(x)
         return x
+
+def MainModel(nOut, **kwargs):
+    return ECAPA_TDNN(1024, nOut = nOut)

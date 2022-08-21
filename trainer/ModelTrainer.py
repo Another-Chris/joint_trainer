@@ -23,14 +23,13 @@ def compute_one_score(all_scores, all_labels, all_trials, line, feats, num_eval)
     ref_feat = feats[data[1]].cuda()
     com_feat = feats[data[2]].cuda()
 
-    with torch.no_grad():
-        # normalize feature
-        ref_feat = F.normalize(ref_feat, p=2, dim=1)
-        com_feat = F.normalize(com_feat, p=2, dim=1)
+    # normalize feature
+    ref_feat = F.normalize(ref_feat, p=2, dim=1)
+    com_feat = F.normalize(com_feat, p=2, dim=1)
 
-        # euclidean dis
-        dist = torch.cdist(ref_feat.reshape(
-            num_eval, -1), com_feat.reshape(num_eval, -1)).cpu().numpy()
+    # euclidean dis
+    dist = torch.cdist(ref_feat.reshape(
+        num_eval, -1), com_feat.reshape(num_eval, -1)).cpu().numpy()
     
     score = -1 * np.mean(dist)
 

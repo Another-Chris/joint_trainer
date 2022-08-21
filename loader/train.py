@@ -72,7 +72,7 @@ class ssl_dataset_loader(TrainLoader):
             seg = load_wav(
                 self.data_list[idx], self.max_frames, evalmode=False)
             
-            # segs.append(torch.FloatTensor(seg))
+            segs.append(torch.FloatTensor(seg))
             augs.append(torch.FloatTensor(self.augment_audio(seg)))
 
         return segs + augs, self.data_label[idx]

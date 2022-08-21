@@ -181,10 +181,6 @@ def main():
     os.makedirs(args.model_save_path, exist_ok=True)
     os.makedirs(args.result_save_path, exist_ok=True)
 
-    print(f"Python version: {sys.version}")
-    print(f"Pytorch version: {torch.__version__}")
-    print(f"Number of GPUs: {torch.cuda.device_count()}")
-    print(f"Save path: {args.save_path}")
     print(f"{args.batch_size = }")
 
     main_worker(args)

@@ -6,7 +6,7 @@ from .utils import load_wav
 
 
 class test_dataset_loader(Dataset):
-    def __init__(self, test_list, test_path, eval_frames, num_eval, **kwargs):
+    def __init__(self, test_list, test_path, eval_frames, num_eval):
         self.max_frames = eval_frames
         self.num_eval = num_eval
         self.test_path = test_path

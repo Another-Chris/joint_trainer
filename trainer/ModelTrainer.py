@@ -15,7 +15,7 @@ sys.path.append("..")
 def compute_one_score(all_scores, all_labels, all_trials, line, feats, num_eval):
     
     data = line.split()
-
+    
     # Append random label if missing
     if len(data) == 2:
         data = [random.randint(0, 1)] + data
@@ -37,19 +37,14 @@ def compute_one_score(all_scores, all_labels, all_trials, line, feats, num_eval)
     all_scores.append(score)
     all_labels.append(int(data[0]))
     all_trials.append(data[1] + " " + data[2])
+    
 
 class ModelTrainer(object):
-    def __init__(self, nPerSpeaker, scheduler, model, optimizer,  **kwargs):
+    def __init__(self, model):
 
-        self.nPerSpeaker = nPerSpeaker
-        self.scheduler = scheduler
-        self.optimizer = optimizer
-        self.model = model
-        
-        self.writer = SummaryWriter(log_dir=f"./logs/{self.model}/{time.time()}")
+        self.writer = SummaryWriter(log_dir=f"./logs/{model}/{time.time()}")
 
-
-    def evaluateFromList(self, test_list, test_path, nDataLoaderThread, num_eval=10, feat_save_path='.', **kwargs):
+    def evaluateFromList(self, test_list, test_path, num_eval=10, **kwargs):
 
         self.encoder.eval()
         self.encoder.to(torch.device('cuda'))
@@ -69,15 +64,24 @@ class ModelTrainer(object):
 
         # Define test data loader
         test_dataset = test_dataset_loader(
-            setfiles, test_path, num_eval=num_eval, **kwargs)
+                    setfiles, 
+                    test_path, 
+                    num_eval=num_eval, 
+                    eval_frames = 400
+                )
 
         test_loader = torch.utils.data.DataLoader(
-            test_dataset, batch_size=1, shuffle=False, num_workers = 2, drop_last=False, sampler=None)
+                    test_dataset, 
+                    batch_size=1, 
+                    shuffle=False, 
+                    num_workers = 2, 
+                    drop_last=False, 
+                    sampler=None
+                    )
 
         ########## extract features ##########
         print('--- extract features ---')
         pbar = tqdm(test_loader, total=len(test_loader))
-
 
         for data in pbar:
             inp1 = data[0][0].cuda()
@@ -103,39 +107,3 @@ class ModelTrainer(object):
 
     def loadParameters(self, path):
         self.encoder.load_state_dict(torch.load(path))
-        # self_state = self.encoder.state_dict()
-
-        # loaded_state = torch.load(path, map_location="cuda:0")
-
-        # if 'model' in loaded_state:
-        #     loaded_state = loaded_state['model']
-
-        # if '__S__' in list(loaded_state.keys())[0]:
-        #     newdict = {}
-        #     delete_list = []
-
-        #     for name, param in loaded_state.items():
-        #         new_name = name.replace('__S__.', '')
-        #         newdict[new_name] = param
-        #         delete_list.append(name)
-
-        #     loaded_state.update(newdict)
-        #     for name in delete_list:
-        #         del loaded_state[name]
-
-        # for name, param in loaded_state.items():
-        #     origname = name
-        #     if name not in self_state:
-        #         name = name.replace("module.", "")
-
-        #         if name not in self_state:
-        #             print("{} is not in the model.".format(origname))
-        #             continue
-
-        #     if self_state[name].size() != loaded_state[origname].size():
-        #         print("Wrong parameter length: {}, model: {}, loaded: {}".format(
-        #             origname, self_state[name].size(), loaded_state[origname].size()))
-        #         continue
-
-        #     # this is how you load the params
-        #     self_state[name].copy_(param)

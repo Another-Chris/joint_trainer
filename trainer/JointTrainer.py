@@ -1,12 +1,10 @@
-from .ModelWithHead import ModelWithHead
-from models import DomainAdaptor
+from models import DomainAdaptor, ModelWithHead
 from .ModelTrainer import ModelTrainer
 from tqdm import tqdm
 
 import torch
 import sys
 import importlib
-import torch.nn.functional as F
 import torch.nn as nn
 
 sys.path.append('..')

@@ -6,9 +6,6 @@ import random
 import torch
 import os
 
-import numpy as np
-
-
 class TrainLoader(Dataset):
     def __init__(self, train_list, augment, musan_path, rir_path, max_frames, train_path, **kwargs):
         self.augment_wav = AugmentWAV(
@@ -58,7 +55,7 @@ class TrainLoader(Dataset):
         return len(self.data_list)
 
 
-class ssl_dataset_loader(TrainLoader):
+class TrainDatasetLoader(TrainLoader):
 
     def __init__(self, nPerSpeaker,  **kwargs):
         super().__init__(**kwargs)
@@ -76,29 +73,3 @@ class ssl_dataset_loader(TrainLoader):
             augs.append(torch.FloatTensor(self.augment_audio(seg)))
 
         return segs + augs, self.data_label[idx]
-
-
-class train_dataset_loader(TrainLoader):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        print(f'sup dataset train list: {self.train_list}')
-
-    def __getitem__(self, indices):
-
-        feat = []
-
-        for index in indices:
-
-            audio = load_wav(self.data_list[index],
-                             self.max_frames, evalmode=False)
-
-            audio = self.augment_audio(audio)
-
-            feat.append(audio)
-
-        feat = np.concatenate(feat, axis=0)
-
-        return torch.FloatTensor(feat), self.data_label[index]
-
-    def __len__(self):
-        return len(self.data_list)

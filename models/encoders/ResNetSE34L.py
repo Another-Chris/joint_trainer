@@ -5,7 +5,7 @@ import torch
 import torchaudio
 import torch.nn as nn
 import torch.nn.functional as F
-from models.ResNetBlocks import *
+from models.encoders.ResNetBlocks import *
 
 class ResNetSE(nn.Module):
     def __init__(

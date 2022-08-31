@@ -4,12 +4,9 @@ import numpy as np
 import soundfile as sf 
 
 
-def round_down(num, divisor): return num - (num % divisor)
-
 
 def worker_init_fn(worker_id): np.random.seed(
     np.random.get_state()[1][0] + worker_id)
-
 
 def load_wav(filename, max_frames, evalmode=True, num_eval=10):
     max_audio = max_frames * 160 + 240

@@ -3,9 +3,30 @@
 
 import yaml
 import sys
-import torch
 import argparse
-import torch.nn.functional as F
+import glob 
+import datetime
+import zipfile 
+import json
+
+
+def save_scripts(result_save_path, configs):
+    # save training code and params
+    pyfiles = glob.glob('./*.py') + glob.glob('./*/*.py')
+    strtime = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+
+    zipf = zipfile.ZipFile(
+        f'{result_save_path}/run{strtime}.zip',
+        'w',
+        zipfile.ZIP_DEFLATED)
+
+    for file in pyfiles:
+        zipf.write(file)
+    zipf.close()
+
+    with open(result_save_path + f'/run_{strtime}.cmd', 'w') as f:
+        js = json.dumps(configs)
+        f.write(js)
 
 
 def accuracy(output, target, topk=(1,)):
@@ -23,26 +44,6 @@ def accuracy(output, target, topk=(1,)):
         res.append(correct_k.mul_(100.0 / batch_size))
     return res
 
-
-class PreEmphasis(torch.nn.Module):
-
-    def __init__(self, coef: float = 0.97):
-        super().__init__()
-        self.coef = coef
-        # make kernel
-        # In pytorch, the convolution operation uses cross-correlation. So, filter is flipped.
-        self.register_buffer(
-            'flipped_filter', torch.FloatTensor(
-                [-self.coef, 1.]).unsqueeze(0).unsqueeze(0)
-        )
-
-    def forward(self, input: torch.tensor) -> torch.tensor:
-        assert len(
-            input.size()) == 2, 'The number of dimensions of input tensor must be 2!'
-        # reflect padding to match lengths of in/out
-        input = input.unsqueeze(1)
-        input = F.pad(input, (1, 0), 'reflect')
-        return F.conv1d(input, self.flipped_filter).squeeze(1)
 
 
 def get_args():

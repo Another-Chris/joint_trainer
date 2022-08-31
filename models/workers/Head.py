@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class ModelWithHead(nn.Module):
+class Head(nn.Module):
     """backbone + projection head"""
 
     def __init__(self, encoder, dim_in, head='mlp', feat_dim=128, **kwargs):

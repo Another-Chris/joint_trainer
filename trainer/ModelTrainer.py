@@ -43,7 +43,7 @@ class ModelTrainer(object):
 
         self.writer = SummaryWriter(log_dir=f"./logs/{model}/{time.time()}")
 
-    def evaluateFromList(self, test_list, test_path, num_eval=10, **kwargs):
+    def evaluateFromList(self, test_list, test_path, num_eval=10):
 
         self.encoder.eval()
         self.encoder.to(torch.device('cuda'))
@@ -104,5 +104,5 @@ class ModelTrainer(object):
     def saveParameters(self, path):
         torch.save(self.encoder.state_dict(), path)
 
-    def loadParameters(self, path):
+    def loadParameters(self, path):        
         self.encoder.load_state_dict(torch.load(path))

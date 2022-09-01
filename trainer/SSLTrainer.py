@@ -1,4 +1,4 @@
-from models import ECAPA_TDNN, Head, Spec
+from models import ECAPA_TDNN, Head, Spec, MFCC, FbankAug, Torchfbank, TorchMFCC
 from .ModelTrainer import ModelTrainer
 from tqdm import tqdm
 from loss import SubConLoss
@@ -17,19 +17,33 @@ DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 class Workers(nn.Module):
     def __init__(self, encoder) -> None:
         super().__init__()
-
-        self.get_fbank = encoder.get_spec
+        
+        self.fbank_aug = FbankAug()
 
         self.worker_subcon = Head(encoder, dim_in=192, feat_dim=128)
         self.loss_subcon = SubConLoss(temperature=0.5)
 
         self.worker_channel = Head(encoder, dim_in=192, feat_dim=128)
-
         self.worker_spec = Spec(encoder, feat_dim=202)  # 202 frames
+        self.worker_mfcc = MFCC(encoder, feat_dim=202)
+
+    def get_fbank(self, x, aug):
+        with torch.no_grad():
+            x = Torchfbank(x)+1e-6
+            x = x.log()
+            x = x - torch.mean(x, dim=-1, keepdim=True)
+            if aug == True:
+                x = self.fbank_aug(x)
+        return x
+
+    def get_mfcc(self, x):
+        with torch.no_grad():
+            x = TorchMFCC(x)
+        return x
 
     def train_subCon(self, segs, augs, bz):
-        outp_segs = self.worker_subcon(segs, aug=False)
-        outp_augs = self.worker_subcon(augs, aug=True)
+        outp_segs = self.worker_subcon(self.get_fbank(segs, aug=False))
+        outp_augs = self.worker_subcon(self.get_fbank(augs, aug=True))
 
         embed = outp_segs.shape[1]
         outp = torch.cat([outp_segs, outp_augs], dim=0).reshape(bz, -1, embed)
@@ -38,15 +52,20 @@ class Workers(nn.Module):
 
     def train_channel(self, segs, augs):
         return -F.cosine_similarity(
-            self.worker_channel(augs, aug=True),
-            self.worker_channel(segs, aug=False)
+            self.worker_channel(self.get_fbank(augs, aug=True)),
+            self.worker_channel(self.get_fbank(segs, aug=False))
         ).mean()
 
     def train_spec(self, segs, augs):
         fbank_segs = self.get_fbank(segs, aug=False)
-        fbank_reconstruct = self.worker_spec(augs, aug = True)
-                
+        fbank_reconstruct = self.worker_spec(self.get_fbank(augs, aug=True))
+
         return F.mse_loss(fbank_reconstruct, fbank_segs)
+
+    def train_mfcc(self, segs, augs):
+        mfcc_segs = self.get_mfcc(segs)
+        mfcc_reconstruct = self.worker_mfcc(self.get_fbank(augs, aug = True))
+        return F.mse_loss(mfcc_segs, mfcc_reconstruct)
 
     def start_train(self, data):
         segs = torch.cat([d for d in data[:2]], dim=0).squeeze(1).to(DEVICE)
@@ -55,6 +74,7 @@ class Workers(nn.Module):
 
         return {
             'spec': self.train_spec(segs, augs),
+            'mfcc': self.train_mfcc(segs, augs),
             'subCon': self.train_subCon(segs, augs, bz),
             'channel': self.train_channel(segs, augs),
         }

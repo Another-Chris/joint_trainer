@@ -20,8 +20,8 @@ class Head(nn.Module):
             raise NotImplementedError(
                 'head not supported: {}'.format(head))
 
-    def forward(self, x, aug):
-        feat = self.encoder(x, aug)
+    def forward(self, x):
+        feat = self.encoder(x)
         feat = self.head(feat)
         feat = F.normalize(feat, dim=1)
         return feat

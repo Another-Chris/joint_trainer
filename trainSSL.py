@@ -11,13 +11,22 @@ torch.cuda.empty_cache()
 MAX_EPOCH = 500
 TEST_INTERVAL = 10
 MODEL_SAVE_PATH = "./save/ECAPA_TDNN"
-BATCH_SIZE = 128
+BATCH_SIZE = 32
+
+TRAIN_LIST = './data/cnceleb_train.txt'
+TRAIN_PATH = './data/cnceleb/data'
+TEST_LIST = './data/cnceleb_test.txt'
+TEST_PATH = './data/cnceleb/eval'
+MUSAN_PATH = "./data/musan_split"
+RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"
+
+
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 
 
 def evaluate(trainer):
     sc, lab, _ = trainer.evaluateFromList(
-        test_list="./data/voxceleb2", test_path="./data/voxceleb2", num_eval=10
+        test_list=TEST_LIST, test_path=TEST_PATH, num_eval=10
     )
     _, eer, _, _ = tuneThresholdfromScore(sc, lab, [1, 0.1])
     fnrs, fprs, thresholds = ComputeErrorRates(sc, lab)
@@ -26,7 +35,14 @@ def evaluate(trainer):
 
 
 if __name__ == "__main__":
-    ds = TrainDatasetLoader()
+    ds = TrainDatasetLoader(
+        train_list=TRAIN_LIST,
+        train_path=TRAIN_PATH,
+        augment=True,
+        musan_path=MUSAN_PATH,
+        rir_path=RIR_PATH,
+        max_frames=200,
+    )
     loader = torch.utils.data.DataLoader(
         ds,
         batch_size=BATCH_SIZE,

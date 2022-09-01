@@ -45,8 +45,7 @@ class ModelTrainer(object):
 
     def evaluateFromList(self, test_list, test_path, num_eval=10):
 
-        self.encoder.eval()
-        self.encoder.to(torch.device('cuda'))
+        self.model.eval()
 
         lines = []
         files = []

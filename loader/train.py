@@ -6,8 +6,10 @@ import random
 import torch
 import os
 
-class TrainLoader(Dataset):
-    def __init__(self, train_list, augment, musan_path, rir_path, max_frames, train_path, **kwargs):
+
+class TrainDatasetLoader():
+
+    def __init__(self, train_list, augment, musan_path, rir_path, max_frames, train_path):
         self.augment_wav = AugmentWAV(
             musan_path=musan_path, rir_path=rir_path, max_frames=max_frames)
         self.train_list = train_list
@@ -39,6 +41,7 @@ class TrainLoader(Dataset):
             self.data_label.append(speaker_label)
             self.data_list.append(filename)
 
+
     def augment_audio(self, audio):
         augtype = random.randint(0, 4)
         if augtype == 1:
@@ -55,17 +58,11 @@ class TrainLoader(Dataset):
         return len(self.data_list)
 
 
-class TrainDatasetLoader(TrainLoader):
-
-    def __init__(self, nPerSpeaker,  **kwargs):
-        super().__init__(**kwargs)
-        self.nPerSpeaker = nPerSpeaker
-        print(f'ssl dataset train list: {self.train_list}, {nPerSpeaker = }')
 
     def __getitem__(self, idx):
 
         segs, augs = [], []
-        for _ in range(2):
+        for i in range(2):
             seg = load_wav(
                 self.data_list[idx], self.max_frames, evalmode=False)
             

@@ -1,4 +1,4 @@
-import torch.nn as nn 
+import torch.nn as nn
 import torch.nn.functional as F
 
 
@@ -19,9 +19,9 @@ class Head(nn.Module):
         else:
             raise NotImplementedError(
                 'head not supported: {}'.format(head))
-            
-    def forward(self, x):
-        feat = self.encoder(x)
+
+    def forward(self, x, aug):
+        feat = self.encoder(x, aug)
         feat = self.head(feat)
         feat = F.normalize(feat, dim=1)
         return feat

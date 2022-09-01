@@ -41,7 +41,6 @@ class TrainDatasetLoader():
             self.data_label.append(speaker_label)
             self.data_list.append(filename)
 
-
     def augment_audio(self, audio):
         augtype = random.randint(0, 4)
         if augtype == 1:
@@ -57,15 +56,13 @@ class TrainDatasetLoader():
     def __len__(self):
         return len(self.data_list)
 
-
-
     def __getitem__(self, idx):
 
         segs, augs = [], []
-        for i in range(2):
+        for _ in range(2):
             seg = load_wav(
                 self.data_list[idx], self.max_frames, evalmode=False)
-            
+
             segs.append(torch.FloatTensor(seg))
             augs.append(torch.FloatTensor(self.augment_audio(seg)))
 

@@ -153,15 +153,20 @@ class ECAPA_TDNN(nn.Module):
         self.bn5 = nn.BatchNorm1d(3072)
         self.fc6 = nn.Linear(3072, 192)
         self.bn6 = nn.BatchNorm1d(192)
-
-
-    def forward(self, x, aug = True):
+        
+    def get_spec(self, x, aug = True):
         with torch.no_grad():
             x = self.torchfbank(x)+1e-6
             x = x.log()   
             x = x - torch.mean(x, dim=-1, keepdim=True)
             if aug == True:
-                x = self.specaug(x)
+                x = self.specaug(x)  
+        return x   
+
+
+    def forward(self, x, aug = True):
+
+        x = self.get_spec(x, aug)
 
         x = self.conv1(x)
         x = self.relu(x)

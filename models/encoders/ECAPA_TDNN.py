@@ -4,6 +4,8 @@ import torchaudio
 import torch.nn as nn
 import torch.nn.functional as F
 
+from models.transforms import Torchfbank
+
 
 class SEModule(nn.Module):
     def __init__(self, channels, bottleneck=128):
@@ -44,6 +46,8 @@ class Bottle2neck(nn.Module):
         self.relu = nn.ReLU()
         self.width = width
         self.se = SEModule(planes)
+        
+        
 
     def forward(self, x):
         residual = x
@@ -80,6 +84,8 @@ class ECAPA_TDNN(nn.Module):
     def __init__(self, C):
 
         super(ECAPA_TDNN, self).__init__()
+        
+        self.torchfbank = Torchfbank
 
         self.conv1 = nn.Conv1d(80, C, kernel_size=5, stride=1, padding=2)
         self.relu = nn.ReLU()

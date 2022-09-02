@@ -85,6 +85,7 @@ class ModelTrainer(object):
             inp1 = data[0][0].cuda()
 
             with torch.no_grad():
+                inp1 = self.model.get_fbank(inp1, aug = False)
                 ref_feat = self.encoder(inp1).detach().cpu()
             feats[data[1][0]] = ref_feat
 

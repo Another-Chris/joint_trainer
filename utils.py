@@ -9,6 +9,14 @@ import datetime
 import zipfile 
 import json
 
+import matplotlib.pyplot as plt
+import librosa.display
+
+def plot_batch(batch):
+    batch = batch.detach().cpu().numpy()
+    librosa.display.specshow(batch[0])
+    plt.show()
+
 
 def save_scripts(result_save_path, configs):
     # save training code and params

@@ -69,13 +69,14 @@ melkwargs = {
     "n_mels": 80
 }
 
+DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+
 Torchfbank = torch.nn.Sequential(
     PreEmphasis(),
     torchaudio.transforms.MelSpectrogram(sample_rate=16000, **melkwargs),
-)
-
+).to(DEVICE)
 
 TorchMFCC = torch.nn.Sequential(
     PreEmphasis(),
     torchaudio.transforms.MFCC(sample_rate=16000, n_mfcc=20, log_mels=True, melkwargs=melkwargs)
-)
+).to(DEVICE)

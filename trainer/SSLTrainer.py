@@ -27,6 +27,7 @@ class Workers(nn.Module):
         self.worker_channel = Head(encoder, dim_in=192, feat_dim=128)
         self.worker_spec = Spec(encoder, feat_dim=202)  # 202 frames
         self.worker_mfcc = MFCC(encoder, feat_dim=202)
+        self.worker_LIM = Head(encoder, dim_in=192, feat_dim=128)
 
     def get_fbank(self, x, aug):
         with torch.no_grad():
@@ -42,13 +43,26 @@ class Workers(nn.Module):
             x = TorchMFCC(x)
         return x
 
-    def train_subCon(self, segs, augs, bz, nviews):
-        outp_segs = self.worker_subcon(self.get_fbank(segs, aug=False))
-        outp_augs = self.worker_subcon(self.get_fbank(augs, aug=True))
+    def train_LIM(self, same_anchor, same_pos, diff_anchor):
+        data = torch.cat([torch.cat([same_anchor, same_pos], dim=1),
+                         torch.cat([same_anchor, diff_anchor], dim=1)])
+        label = torch.cat([torch.ones(size=(same_anchor.shape[0], data.shape[1])),
+                          torch.zeros(size=(same_anchor.shape[0], data.shape[1]))])
+        return F.binary_cross_entropy_with_logits(data, label)
 
-        outp = torch.cat([outp_segs, outp_augs], dim=0)
-        outp = torch.cat([d.unsqueeze(1)
-                         for d in torch.split(outp, [bz] * nviews, dim=0)], dim=1)
+    def train_subCon(self, segs, augs, bz, nviews):
+        outp = torch.cat([
+            torch.cat(
+                [
+                    d.unsqueeze(1) for d in torch.split(
+                        self.worker_subcon(
+                            self.get_fbank(data[0], aug=data[1])),
+                        [bz] * nviews,
+                        dim=0
+                    )
+                ], dim=1) for data in [(segs, False), (augs, True)]
+        ], dim=0)
+
         loss = self.loss_subcon(outp)
         return loss
 
@@ -91,16 +105,21 @@ class Workers(nn.Module):
 
         return loss
 
-    def start_train(self, data):
-        nviews = len(data)
-        segs = torch.cat([d for d in data[:2]], dim=0).squeeze(1).to(DEVICE)
-        augs = torch.cat([d for d in data[2:]], dim=0).squeeze(1).to(DEVICE)
-        bz = data[0].shape[0]
+    def start_train(self, data, nviews, bz):
 
         return {
-            'spec': self.train_spec(segs, bz),
-            'mfcc': self.train_mfcc(segs, bz),
-            'subCon': self.train_subCon(segs, augs, bz, nviews),
+            # 'spec': self.train_spec(segs, bz),
+            # 'mfcc': self.train_mfcc(segs, bz),
+            'subCon': self.train_subCon(
+                segs=torch.cat([data['same_anchor'], data['diff']],
+                               dim=0).squeeze(1).to(DEVICE),
+                augs=torch.cat([data['same_anchor_aug'], data['diff_aug']], dim=0).squeeze(
+                    1).to(DEVICE),
+                bz=bz,
+                nviews=nviews),
+            'LIM': self.train_LIM(
+                *(d.squeeze(1).to(DEVICE) for d in [data['same_anchor'], data['same_pos'], data['diff']])
+            )
         }
 
 
@@ -124,9 +143,9 @@ class SSLTrainer(ModelTrainer):
         pbar = tqdm(enumerate(loader), total=len(loader))
 
         for step, (data, _) in pbar:
-            run = step + 1
 
-            losses = self.model.start_train(data)
+            losses = self.model.start_train(
+                data, nviews=2, bz=loader.batch_size)
 
             loss = torch.mean(torch.stack(list(losses.values())))
             self.optim.zero_grad()

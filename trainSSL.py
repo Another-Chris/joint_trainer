@@ -35,15 +35,15 @@ def evaluate(trainer):
 
 
 if __name__ == "__main__":
-    ds = TrainDatasetLoader(
-        train_list=TRAIN_LIST,
-        train_path=TRAIN_PATH,
-        augment=True,
-        musan_path=MUSAN_PATH,
-        rir_path=RIR_PATH,
-        max_frames=200,
-    )
-    # ds = DummyLoader(siglen = (1, 32250))
+    # ds = TrainDatasetLoader(
+    #     train_list=TRAIN_LIST,
+    #     train_path=TRAIN_PATH,
+    #     augment=True,
+    #     musan_path=MUSAN_PATH,
+    #     rir_path=RIR_PATH,
+    #     max_frames=200,
+    # )
+    ds = DummyLoader(siglen = (1, 32250))
     loader = torch.utils.data.DataLoader(
         ds,
         batch_size=BATCH_SIZE,
@@ -56,9 +56,9 @@ if __name__ == "__main__":
     # either load the initial_model or read the previous model files
     it = 1
 
-    trainer.encoder.load_state_dict(
-        torch.load("./pre_trained/ECAPA_TDNN.model"))
-    print('pretrained ECAPA_TDNN loaded!')
+    # trainer.encoder.load_state_dict(
+    #     torch.load("./pre_trained/ECAPA_TDNN.model"))
+    # print('pretrained ECAPA_TDNN loaded!')
 
     # core training script
     for it in range(it, MAX_EPOCH + 1):

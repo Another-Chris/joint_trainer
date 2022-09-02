@@ -6,6 +6,8 @@ import random
 import torch
 import os
 
+import numpy as np
+
 
 class TrainDatasetLoader():
 
@@ -58,12 +60,19 @@ class TrainDatasetLoader():
 
     def __getitem__(self, idx):
 
-        segs, augs = [], []
-        for _ in range(2):
-            seg = load_wav(
-                self.data_list[idx], self.max_frames, evalmode=False)
-
-            segs.append(torch.FloatTensor(seg))
-            augs.append(torch.FloatTensor(self.augment_audio(seg)))
-
-        return segs + augs, self.data_label[idx]
+        data = {}
+        
+        same_utt = self.data_list[idx]
+        diff_utt = self.data_list[np.random.choice(np.arange(0, idx), 1)]
+        
+        data['same_anchor'] = load_wav(same_utt, self.max_frames, evalmode=False)
+        data['same_anchor_aug'] = self.augment_audio(data['same_anchor'])
+        data['same_pos'] = load_wav(same_utt, self.max_frames, evalmode=False)
+        
+        data['diff'] = load_wav(diff_utt, self.max_frames, evalmode=False)
+        data['diff_aug'] = self.augment_audio(data['diff'])
+        
+        for key,value in data.items():
+            data[key] = torch.FloatTensor(value)
+        
+        return data, self.data_label[idx]

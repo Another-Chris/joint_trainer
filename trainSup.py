@@ -1,29 +1,20 @@
 from tuneThreshold import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
 from loader import TrainDatasetLoader,DummyLoader
-from trainer import SSLTrainer
+from trainer import SupTrainer
 from pathlib import Path
+from utils import Config
 
 import torch.cuda
-torch.cuda.empty_cache()
 import torch
+torch.cuda.empty_cache()
 
-
-MAX_EPOCH = 500
-MAX_FRAMES = 200
-TEST_INTERVAL = 1
-MODEL_SAVE_PATH = "./save/ECAPA_TDNN"
-BATCH_SIZE = 32
-
-TRAIN_LIST = './data/cnceleb_train.txt'
-TRAIN_PATH = './data/cnceleb/data'
-TEST_LIST = './data/cnceleb_test.txt'
-TEST_PATH = './data/cnceleb/eval'
-MUSAN_PATH = "./data/musan_split"
-RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"
-
+MODEL_SAVE_PATH = "./save/PASE"
+TRAIN_LIST = './data/voxceleb_train.txt'
+TRAIN_PATH = './data/voxceleb/data'
+TEST_LIST = './data/voxceleb_test.txt'
+TEST_PATH = './data/voxceleb/eval'
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
-
 
 def evaluate(trainer):
     sc, lab, _ = trainer.evaluateFromList(
@@ -36,33 +27,30 @@ def evaluate(trainer):
 
 
 if __name__ == "__main__":
-    ds = TrainDatasetLoader(
-        train_list=TRAIN_LIST,
-        train_path=TRAIN_PATH,
-        augment=True,
-        musan_path=MUSAN_PATH,
-        rir_path=RIR_PATH,
-        max_frames=MAX_FRAMES
-    )
-    # ds = DummyLoader(siglen = (1, 32250))
+    # ds = TrainDatasetLoader(
+    #     train_list=TRAIN_LIST,
+    #     train_path=TRAIN_PATH,
+    #     augment=True,
+    #     musan_path=MUSAN_PATH,
+    #     rir_path=RIR_PATH,
+    #     max_frames=200,
+    # )
+    ds = DummyLoader(siglen = (1, Config.MAX_FRAMES * 160 + 240))
     loader = torch.utils.data.DataLoader(
         ds,
-        batch_size=BATCH_SIZE,
+        batch_size=Config.BATCH_SIZE,
         shuffle=True,
         num_workers=6,
         drop_last=True,
     )
-    trainer = SSLTrainer()
-
-    # either load the initial_model or read the previous model files
-    it = 1
-
-    trainer.encoder.load_state_dict(
-        torch.load("./pre_trained/ECAPA_TDNN.model"))
-    print('pretrained ECAPA_TDNN loaded!')
+    trainer = SupTrainer()
+    # trainer.encoder.load_state_dict(
+    #     torch.load("./pre_trained/ECAPA_TDNN.model"))
+    # print('pretrained ECAPA_TDNN loaded!')
 
     # core training script
-    for it in range(it, MAX_EPOCH + 1):
+    it = 1
+    for it in range(it, Config.MAX_EPOCH + 1):
         print(f'epoch {it}')
         # train_network: iterate through all the data
         loss = trainer.train_network(loader, it - 1)
@@ -73,13 +61,14 @@ if __name__ == "__main__":
         for key,val in loss_val_dict.items():
             trainer.writer.add_scalar(f'epoch/{key}', val, it)
             desc += f" {key} = {val :.4f}"
-
-        mpath = f'{MODEL_SAVE_PATH}/model-{it}.model'
-        trainer.saveParameters(mpath)
         print(desc)
 
-        if it % TEST_INTERVAL == 0:
+        if it % Config.TEST_INTERVAL == 0:
             eer, mindcf = evaluate(trainer)
             print(f'\n Epoch {it}, VEER {eer:.4f}, MinDCF: {mindcf:.5f}')
             trainer.writer.add_scalar('Eval/EER', eer, it)
             trainer.writer.add_scalar('Eval/MinDCF', mindcf, it)
+        
+        ## save params for every epoch
+        mpath = f'{MODEL_SAVE_PATH}/model-{it}.model'
+        trainer.saveParameters(mpath)

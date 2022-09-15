@@ -45,7 +45,10 @@ class ModelTrainer(object):
 
     def evaluateFromList(self, test_list, test_path, num_eval=10):
 
-        self.model.eval()
+        if self.model is not None:
+            self.model.eval()
+        else:
+            self.encoder.eval()
 
         lines = []
         files = []
@@ -85,7 +88,6 @@ class ModelTrainer(object):
             inp1 = data[0][0].cuda()
 
             with torch.no_grad():
-                inp1 = self.model.get_fbank(inp1, aug = False)
                 ref_feat = self.encoder(inp1).detach().cpu()
             feats[data[1][0]] = ref_feat
 

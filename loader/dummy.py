@@ -11,7 +11,6 @@ class DummyLoader(Dataset):
             segs.append(torch.FloatTensor(torch.normal(0,1,size = self.siglen)))
             augs.append(torch.FloatTensor(torch.normal(0,1,size = self.siglen)))
             
-            
         return segs + augs, 0
 
     def __len__(self):

@@ -8,9 +8,21 @@ import glob
 import datetime
 import zipfile 
 import json
+import torch
 
 import matplotlib.pyplot as plt
 import librosa.display
+
+
+class Config():
+    MAX_EPOCH = 500
+    TEST_INTERVAL = 1
+    BATCH_SIZE = 32
+    MUSAN_PATH = "./data/musan_split"
+    RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"    
+    DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    NUM_CLASSES = 5994
+    MAX_FRAMES = 200
 
 def plot_batch(batch):
     batch = batch.detach().cpu().numpy()

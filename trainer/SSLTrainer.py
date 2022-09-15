@@ -1,5 +1,5 @@
 from utils import plot_batch
-from models import ECAPA_TDNN, Head, Spec, MFCC, FbankAug, Torchfbank, TorchMFCC
+from models import ECAPA_TDNN, Head, FbankAug, Torchfbank, TorchMFCC
 from .ModelTrainer import ModelTrainer
 from tqdm import tqdm
 from loss import SubConLoss

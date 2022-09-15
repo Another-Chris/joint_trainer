@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 import json
-from pase.models.WorkerScheduler.encoder import encoder
+from .WorkerScheduler.encoder import encoder
 import torchvision.models as models
 try:
     from modules import *

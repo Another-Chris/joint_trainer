@@ -41,7 +41,7 @@ def compute_one_score(all_scores, all_labels, all_trials, line, feats, num_eval)
 class ModelTrainer(object):
     def __init__(self, model):
 
-        self.writer = SummaryWriter(log_dir=f"./logs/{model}/{time.time()}")
+        self.writer = SummaryWriter(log_dir=f"./logs/{model}_sup/{time.time()}")
 
     def evaluateFromList(self, test_list, test_path, num_eval=10):
 
@@ -88,7 +88,7 @@ class ModelTrainer(object):
             inp1 = data[0][0].cuda()
 
             with torch.no_grad():
-                ref_feat = self.encoder(inp1).detach().cpu()
+                ref_feat = self.encoder(inp1.unsqueeze(1)).detach().cpu()
             feats[data[1][0]] = ref_feat
 
         ########## compute the scores ##########

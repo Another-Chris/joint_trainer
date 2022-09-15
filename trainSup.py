@@ -8,11 +8,12 @@ import torch.cuda
 import torch
 torch.cuda.empty_cache()
 
-MODEL_SAVE_PATH = "./save/PASE"
+MODEL_SAVE_PATH = "./save/PASE_sup"
 TRAIN_LIST = './data/voxceleb_train.txt'
-TRAIN_PATH = './data/voxceleb/data'
+TRAIN_PATH = './data/voxceleb2'
 TEST_LIST = './data/voxceleb_test.txt'
-TEST_PATH = './data/voxceleb/eval'
+TEST_PATH = './data/voxceleb1_test'
+PRE_TRAINED = "./pre_trained/FE_e199.ckpt"
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 
@@ -27,15 +28,14 @@ def evaluate(trainer):
 
 
 if __name__ == "__main__":
-    # ds = TrainDatasetLoader(
-    #     train_list=TRAIN_LIST,
-    #     train_path=TRAIN_PATH,
-    #     augment=True,
-    #     musan_path=MUSAN_PATH,
-    #     rir_path=RIR_PATH,
-    #     max_frames=200,
-    # )
-    ds = DummyLoader(siglen = (1, Config.MAX_FRAMES * 160 + 240))
+    ds = TrainDatasetLoader(
+        train_list=TRAIN_LIST,
+        train_path=TRAIN_PATH,
+        augment=True,
+        musan_path=Config.MUSAN_PATH,
+        rir_path=Config.RIR_PATH,
+        max_frames=200,
+    )
     loader = torch.utils.data.DataLoader(
         ds,
         batch_size=Config.BATCH_SIZE,
@@ -44,9 +44,9 @@ if __name__ == "__main__":
         drop_last=True,
     )
     trainer = SupTrainer()
-    # trainer.encoder.load_state_dict(
-    #     torch.load("./pre_trained/ECAPA_TDNN.model"))
-    # print('pretrained ECAPA_TDNN loaded!')
+    
+    # trainer.encoder.load_pretrained(PRE_TRAINED)
+    # print('pretrained PASE loaded!')
 
     # core training script
     it = 1
@@ -54,21 +54,15 @@ if __name__ == "__main__":
         print(f'epoch {it}')
         # train_network: iterate through all the data
         loss = trainer.train_network(loader, it - 1)
-        clr = -1
-
-        loss_val_dict = loss
-        desc = f"EPOCH {it}: "
-        for key,val in loss_val_dict.items():
-            trainer.writer.add_scalar(f'epoch/{key}', val, it)
-            desc += f" {key} = {val :.4f}"
-        print(desc)
-
-        if it % Config.TEST_INTERVAL == 0:
-            eer, mindcf = evaluate(trainer)
-            print(f'\n Epoch {it}, VEER {eer:.4f}, MinDCF: {mindcf:.5f}')
-            trainer.writer.add_scalar('Eval/EER', eer, it)
-            trainer.writer.add_scalar('Eval/MinDCF', mindcf, it)
         
-        ## save params for every epoch
+        # save params for every epoch
         mpath = f'{MODEL_SAVE_PATH}/model-{it}.model'
         trainer.saveParameters(mpath)
+
+        if it % Config.TEST_INTERVAL == 0:
+                eer, mindcf = evaluate(trainer)
+
+                print(f'\n Epoch {it}, VEER {eer:.4f}, MinDCF: {mindcf:.5f}')
+
+                trainer.writer.add_scalar('Eval/EER', eer, it)
+                trainer.writer.add_scalar('Eval/MinDCF', mindcf, it)

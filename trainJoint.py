@@ -55,7 +55,6 @@ if __name__ == "__main__":
         max_frames=Config.MAX_FRAMES
     )
 
-    # ds = DummyLoader(siglen = (1, 32250))
     source_loader = torch.utils.data.DataLoader(
         source_ds,
         batch_size=Config.BATCH_SIZE,
@@ -83,10 +82,8 @@ if __name__ == "__main__":
     # core training script
     for it in range(1, Config.MAX_EPOCH + 1):
         print(f'epoch {it}')
-        # train_network: iterate through all the data
         loss = trainer.train_network()
-        clr = -1
-
+        
         loss_val_dict = loss
         desc = f"EPOCH {it}: "
         for key, val in loss_val_dict.items():

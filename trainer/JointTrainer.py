@@ -16,12 +16,12 @@ DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 
 class Workers(nn.Module):
-    def __init__(self, encoder) -> None:
+    def __init__(self, encoder, embed_size) -> None:
         super().__init__()
 
-        self.gim = GIM(encoder, embed_size=256, proj_size=128)
-        self.lim = LIM(encoder, embed_size=256, proj_size=128)
-        self.cls = Cls(encoder, embed_size=256, num_classes=Config.NUM_CLASSES)
+        self.gim = GIM(encoder, embed_size=embed_size, proj_size=128)
+        self.lim = LIM(encoder, embed_size=embed_size, proj_size=128)
+        self.cls = Cls(encoder, embed_size=embed_size, num_classes=Config.NUM_CLASSES)
         
     def train_cls(self, x, y):
         return self.cls.loss(self.cls(x), y)
@@ -59,7 +59,7 @@ class JointTrainer(ModelTrainer):
 
         # model
         self.encoder = importlib.import_module('models').__getattribute__(model_name)
-        self.model = Workers(self.encoder, source_gen = source_gen, target_gen = target_gen)
+        self.model = Workers(self.encoder, embed_size = 192, source_gen = source_gen, target_gen = target_gen)
         self.model.to(DEVICE)
 
         # optimizer

@@ -40,8 +40,6 @@ def make_samples(x,augment):
 
         return  x_pos, x_neg
 
-
-
 def make_labels(y):
     bsz = y.size(0) // 2
     slen = y.size(2)

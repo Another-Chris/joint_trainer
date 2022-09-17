@@ -1,168 +1,101 @@
-# from models import DomainAdaptor, ModelWithHead
-# from .ModelTrainer import ModelTrainer
-# from tqdm import tqdm
+from models import Cls, GIM, LIM
+from .ModelTrainer import ModelTrainer
+from tqdm import tqdm
+from loss import SubConLoss
+from utils import Config
 
-# import torch
-# import sys
-# import importlib
-# import torch.nn as nn
-# import torch.nn.functional as F
-
-# sys.path.append('..')
-
-
-# class Composer(nn.Module):
-#     def __init__(self, nOut, supervised_gen, ssl_gen, sup_loss, ssl_loss, encoder, nPerSpeaker, **kwargs) -> None:
-#         super().__init__()
-
-#         self.ssl_model = ModelWithHead(
-#             encoder, dim_in=192, feat_dim=nOut, head='mlp')
-#         # because the loss already includes the learnable w and b
-#         self.sup_model = ModelWithHead(
-#             encoder, dim_in=192, feat_dim=nOut, head='mlp')
-#         self.regressor = ModelWithHead(
-#             encoder, dim_in=192, feat_dim=nOut, head='mlp')
-#         self.domain_adaptor = DomainAdaptor(in_dim=2 * nOut)
-
-#         self.supervised_gen = supervised_gen
-#         self.ssl_gen = ssl_gen
-#         self.nOut = nOut
-#         self.nPerSpeaker = nPerSpeaker
-#         SupLoss = importlib.import_module(
-#             'loss.' + sup_loss).__getattribute__('LossFunction')
-#         self.sup_loss = SupLoss(nOut=nOut, temperature=0.5, **kwargs)
-
-#         SSLLoss = importlib.import_module(
-#             'loss.' + ssl_loss).__getattribute__('LossFunction')
-#         self.ssl_loss = SSLLoss(**kwargs)
-#         self.ssl_loss_name = ssl_loss
+import torch
+import importlib
+import sys
+import torch.nn as nn
+import torch.optim as optim
+sys.path.append('..')
 
 
-#     def train_ssl(self):
-#         data, _ = next(self.ssl_gen)
-#         data = torch.cat([d for d in data], dim=0)
-
-#         data = data.squeeze(1).cuda()
-#         outp = self.ssl_model(data)
-#         outp = outp.reshape(len(data), -1, outp.size()
-#                             [-1]).transpose(1, 0).squeeze(1)
-
-#         loss = self.ssl_loss(outp)
-
-#         if type(loss) == tuple:
-#             loss = loss[0]
-
-#         return loss, outp
-
-#     def train_sup(self):
-#         data, label = next(self.supervised_gen)
-
-#         data = data.transpose(1, 0)
-#         data = data.reshape(-1, data.size()[-1]).cuda()
-
-#         label = label.long().cuda()
-
-#         outp = self.sup_model(data)
-
-#         # if some dim has more than 1 cols, squeeze has no use
-#         outp = outp.reshape(self.nPerSpeaker, -1,
-#                             outp.size()[-1]).transpose(1, 0).squeeze(1)
-#         loss = self.sup_loss(outp, label)
-
-#         if type(loss) == tuple:
-#             loss = loss[0]
-
-#         return loss, outp
-
-#     def train_channel(self):
-#         data, _ = next(self.ssl_gen)
-#         seg1, seg2, aug1, aug2 = data
-
-#         mse_seg = F.mse_loss(self.regressor(seg1), self.regressor(seg2))
-#         mse_aug = F.mse_loss(self.regressor(aug1), self.regressor(aug2))
-
-#         return (mse_aug + mse_seg) / 2
-
-#     def train_language(self):
-#         ssl_data, _ = next(self.ssl_gen)
-#         sup_data, _ = next(self.supervised_gen)
-
-#         ssl_aug1, ssl_aug2 = ssl_data[2], ssl_data[3]
-#         pos = self.domain_adaptor(torch.cat([ssl_aug1, ssl_aug2], dim=1))
-#         neg = self.domain_adaptor(torch.cat([ssl_aug1, sup_data], dim=1))
-
-#         return torch.mean(torch.log(pos + 1e-6) + torch.log(1-neg + 1e-6), dim=0)
-
-#     def start_train(self):
-#         return {
-#             'sup': self.train_sup(),
-#             'ssl': self.train_ssl(),
-#             'lan':    self.train_language(),
-#             'channel':  self.train_channel()
-#         }
+DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 
-# class JointTrainer(ModelTrainer):
-#     def __init__(self, nOut, **kwargs):
-#         super().__init__(**kwargs)
+class Workers(nn.Module):
+    def __init__(self, encoder) -> None:
+        super().__init__()
 
-#         # model
-#         ModelFn = importlib.import_module(
-#             'models.' + self.model).__getattribute__('MainModel')
-#         self.encoder = ModelFn()
-#         self.model = Composer(encoder=self.encoder, nOut=nOut, **kwargs)
-#         self.model.cuda()
+        self.gim = GIM(encoder, embed_size=256, proj_size=128)
+        self.lim = LIM(encoder, embed_size=256, proj_size=128)
+        self.cls = Cls(encoder, embed_size=256, num_classes=Config.NUM_CLASSES)
+        
+    def train_cls(self, x, y):
+        return self.cls.loss(self.cls(x), y)
+        
+    def train_subCon(self, segs, augs, bz, nviews):
+        outp_segs = self.worker_subcon(self.get_fbank(segs, aug=False))
+        outp_augs = self.worker_subcon(self.get_fbank(augs, aug=True))
 
-#         # optimizer
-#         Optim = importlib.import_module(
-#             'optimizer.' + self.optimizer).__getattribute__('Optimizer')
-#         self.optim = Optim(
-#             self.model.parameters(),
-#             lr=kwargs['lr'],
-#             weight_decay=kwargs['weight_decay'])
+        outp = torch.cat([outp_segs, outp_augs], dim=0)
+        outp = torch.cat([d.unsqueeze(1)
+                         for d in torch.split(outp, [bz] * nviews, dim=0)], dim=1)
+        loss = self.loss_subcon(outp)
+        return loss
+    
+    def train_GIM(self, data):
+        return self.gim.loss(self.gim(data)[0], self.gim(data)[1])
+    
+    def train_LIM(self, data):
+        return self.lim.loss(self.lim(data)[0], self.lim(data)[1])
 
-#         Scheduler = importlib.import_module(
-#             'scheduler.' + self.scheduler).__getattribute__('Scheduler')
-#         del kwargs['optimizer']
-#         self.scheduler, self.lr_step = Scheduler(
-#             optimizer=self.optim, **kwargs)
+    def start_train(self):
 
-#     def train_network(self, loader=None, epoch=None):
+        source_data, source_label = next(self.source_gen)
+        target_data, _ = next(self.target_gen)
+        return {
+            'cls': self.train_cls(source_data[0], source_label),
+            'LIM': self.train_LIM(target_data),
+            'GIM': self.train_GIM(target_data),
+        }
 
-#         steps_per_epoch = 256
-#         self.model.train()
-#         loss_epoch = 0
 
-#         pbar = tqdm(range(steps_per_epoch))
-#         for step in pbar:
-#             losses = self.model.start_train()
-            
-#             loss = torch.mean(losses.values())
-#             self.optim.zero_grad()
-#             loss.backward()
-#             self.optim.step()
+class JointTrainer(ModelTrainer):
+    def __init__(self, model_name, source_gen, target_gen):
+        super().__init__(model_name)
 
-#             desc = ""
-#             for key, val in losses:
-#                 val = val.detach().cpu()
-#                 self.writer.add_scalar(
-#                     f"step/{key}", val, epoch * steps_per_epoch + step)
-#                 desc += "{key} = {val}"
-                
-#             loss =  loss.detach().cpu()
-#             self.writer.add_scalar(
-#                     f"step/loss", loss, epoch * steps_per_epoch + step)
-#             desc += f"{loss = }"
-            
-#             loss_epoch += loss
+        # model
+        self.encoder = importlib.import_module('models').__getattribute__(model_name)
+        self.model = Workers(self.encoder, source_gen = source_gen, target_gen = target_gen)
+        self.model.to(DEVICE)
 
-#             if self.lr_step == 'iteration':
-#                 self.scheduler.step(epoch + step / len(loader))
+        # optimizer
+        self.optim = optim.Adam(self.model.parameters(), lr=1e-3)
 
-#         if self.lr_step == 'epoch':
-#             self.scheduler.step()
+    def train_network(self, loader=None, epoch=None):
 
-#         step += 1
+        self.model.train()
+        loss_val_dict = {}
 
-#         return loss_epoch
+        pbar = tqdm(enumerate(range(1024)), total=len(loader))
 
+        for step in pbar:
+
+            losses = self.model.start_train()
+
+            loss = torch.mean(torch.stack(list(losses.values())))
+            self.optim.zero_grad()
+            loss.backward()
+            self.optim.step()
+
+            desc = ""
+            for key, val in losses.items():
+                val = val.detach().cpu()
+                loss_val_dict[key] = (loss_val_dict.get(key, 0) + val)
+                self.writer.add_scalar(
+                    f"step/{key}", val, epoch * len(loader) + step)
+                desc += f" {key} = {val :.4f}"
+
+            loss = loss.detach().cpu().item()
+            self.writer.add_scalar(
+                f"step/loss", loss, epoch * len(loader) + step)
+            loss_val_dict['loss'] = (
+                loss_val_dict.get('loss', 0) + loss)
+
+            desc += f" {loss = :.3f}"
+            pbar.set_description(desc)
+
+        return loss_val_dict

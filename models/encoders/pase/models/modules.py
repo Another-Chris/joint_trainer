@@ -806,7 +806,7 @@ class SincConv_fast(nn.Module):
     "Speaker Recognition from raw waveform with SincNet".
     https://arxiv.org/abs/1808.00158
     """
-
+    
     @staticmethod
     def to_mel(hz):
         return 2595 * np.log10(1 + hz / 700)

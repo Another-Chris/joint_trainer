@@ -15,8 +15,8 @@ import librosa.display
 
 
 class Config():
-    MAX_EPOCH = 500
-    TEST_INTERVAL = 1
+    MAX_EPOCH = 20
+    TEST_INTERVAL = 5
     BATCH_SIZE = 32
     MUSAN_PATH = "./data/musan_split"
     RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"    

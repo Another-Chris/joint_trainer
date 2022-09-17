@@ -16,20 +16,19 @@ sys.path.append('..')
 
 MODEL_NAME = "PASE"
 
-
 class SupTrainer(ModelTrainer):
     def __init__(self):
         super().__init__(MODEL_NAME)
 
         # model
-        self.encoder = PASE('./configs/PASE+.cfg')
+        self.encoder = PASE('./configs/PASE+.cfg').to(Config.DEVICE)
         dim_in = self.encoder(
-            torch.zeros(size=(1,1,MAX_FRAMES * 160 + 240))).size(2)
+            torch.zeros(size=(1,1,MAX_FRAMES * 160 + 240)).to(Config.DEVICE)).size(2)
         self.model = Head(self.encoder, dim_in=dim_in, feat_dim=Config.NUM_CLASSES)
         self.model.to(Config.DEVICE)
 
         # optimizer
-        self.optim = optim.Adam(self.model.parameters(), lr=1e-3)
+        self.optim = optim.Adam(self.model.parameters(), lr=5e-4)
 
     def train_network(self, loader=None, epoch=None):
 
@@ -41,6 +40,8 @@ class SupTrainer(ModelTrainer):
         for step, (data, label) in pbar:
 
             outp = self.model(data[2].to(Config.DEVICE))
+            print(outp.shape)
+            exit()
             loss = F.cross_entropy(outp, torch.LongTensor(
                 np.eye(Config.NUM_CLASSES, dtype='uint8')[label]).to(Config.DEVICE))
 
@@ -53,4 +54,4 @@ class SupTrainer(ModelTrainer):
 
             pbar.set_description(f'{loss = :.4f}')
 
-        return loss_epoch / step
+        return loss_epoch / (step + 1)

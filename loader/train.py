@@ -9,39 +9,53 @@ import os
 import numpy as np
 
 
+def get_data_from_file(data_root, filename):
+
+    with open(filename) as dataset_file:
+        lines = dataset_file.readlines()
+
+    dictkeys = list(set([x.split()[0] for x in lines]))
+    dictkeys.sort()
+    dictkeys = {key: li for li, key in enumerate(dictkeys)}
+
+    data_list = [] 
+    data_label = []
+
+    for line in lines:
+        data = line.strip().split()
+
+        speaker_label = dictkeys[data[0]]  # data[0]: index
+        filename = os.path.join(data_root, data[1])
+
+        data_label.append(speaker_label)
+        data_list.append(filename)
+        
+    return data_list, data_label
+
+
 class DsLoader():
-    def __init__(self, train_list, augment, musan_path, rir_path, max_frames, train_path):
+    def __init__(
+            self, 
+            source_list,
+            source_path,
+            augment, 
+            musan_path, 
+            rir_path, 
+            max_frames,
+            target_list = None,
+            target_path = None, 
+            ):
         self.augment_wav = AugmentWAV(
             musan_path=musan_path, rir_path=rir_path, max_frames=max_frames)
-        self.train_list = train_list
+
+        self.source_data, self.source_label = get_data_from_file(source_path, source_list)
+        
+        if target_list is not None and target_path is not None:
+            self.target_data, self.target_label = get_data_from_file(target_path, target_list)
+        
         self.max_frames = max_frames
-        self.musan_path = musan_path
-        self.rir_path = rir_path
         self.augment = augment
 
-        with open(train_list) as dataset_file:
-            lines = dataset_file.readlines()
-
-        # make a dictionary of speaker labels and indices
-        # usage: label encoder
-        # line: idxxxxx path
-        dictkeys = list(set([x.split()[0] for x in lines]))
-        dictkeys.sort()
-        dictkeys = {key: li for li, key in enumerate(dictkeys)}
-
-        # parse the training list into file names and ID indices
-        self.data_list = []  # store the filename
-        self.data_label = []
-
-        for line in lines:
-            data = line.strip().split()
-
-            speaker_label = dictkeys[data[0]]  # data[0]: index
-            filename = os.path.join(train_path, data[1])
-
-            self.data_label.append(speaker_label)
-            self.data_list.append(filename)
-            
     def augment_audio(self, audio):
         augtype = random.randint(0, 4)
         if augtype == 1:
@@ -52,44 +66,62 @@ class DsLoader():
             audio = self.augment_wav.additive_noise('speech', audio)
         elif augtype == 4:
             audio = self.augment_wav.additive_noise('noise', audio)
-        return audio 
-    
+        return audio
+
     def __len__(self):
-        return len(self.data_list)
+        return len(self.source_data)
+    
+    def get_triplet(self, idx, data_list, label_list, eval_mode, num_eval):
 
-class TrainDatasetLoader(DsLoader):
-
-    def __init__(self) -> None:
-        super(TrainDatasetLoader).__init__()
+        diff_idx = np.random.choice([i for i in range(len(data_list)) if i != idx], 1)[0]
         
-    def __getitem__(self, idx):
-
         anchor = self.augment_audio(load_wav(
-            self.data_list[idx], self.max_frames, evalmode=False))
+            data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
         same = self.augment_audio(load_wav(
-            self.data_list[idx], self.max_frames, evalmode=False))
+            data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
         diff = self.augment_audio(load_wav(
-            self.data_list[np.random.choice([i for i in range(len(self.data_list)) if i != idx], 1)[0]], self.max_frames, evalmode=False))
-
-        return [anchor, same, diff], self.data_label[idx]
-
-
-class GIMDatasetLoader(DsLoader):
-
-    def __init__(self) -> None:
-        super(TrainDatasetLoader).__init__()
+            data_list[diff_idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
         
+        return anchor, same, diff, label_list[idx], label_list[diff_idx]   
+    
+        
+class JointLoader():
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     def __getitem__(self, idx):
-
-        anchor = self.augment_audio(load_wav(
-            self.data_list[idx], self.max_frames, evalmode=True, num_eval = Config.GIM_SEGS))
-        same = self.augment_audio(load_wav(
-            self.data_list[idx], self.max_frames, evalmode=True, num_eval = Config.GIM_SEGS))
-        diff = self.augment_audio(load_wav(
-            self.data_list[np.random.choice([i for i in range(len(self.data_list)) if i != idx], 1)[0]], 
-            self.max_frames, 
-            evalmode=True, 
-            num_eval = Config.GIM_SEGS
-            ))
-
-        return [anchor, same, diff], self.data_label[idx]
+        source_anchor, source_same, source_diff, source_anchor_label, source_diff_label\
+            = self.get_triplet(idx, self.source_data, self.source_label, eval_mode=False, num_eval = 1)
+                    
+        gim_idx = np.random.choice(range(len(self.target_data)),1)[0]
+        gim_anchor, gim_same, gim_diff, gim_anchor_label, gim_diff_label\
+            = self.get_gim_triplet(gim_idx, self.target_data, self.target_label, eval_mode = True, num_eval = Config.GIM_SEGS)
+        
+        target_idx = np.random.choice(range(len(Config.GIM_SEGS)),1)[0]
+        
+        data =  {
+            'source_anchor': source_anchor,
+            'source_same': source_same,
+            'source_diff': source_diff,
+   
+            'target_anchor': gim_anchor[target_idx],
+            'target_same': gim_same[target_idx],
+            'target_diff': gim_diff[target_idx],
+            
+            'gim_anchor': gim_anchor,
+            'gim_same': gim_same,
+            'gim_diff': gim_diff,
+        }
+        
+        label =  {
+            'source_anchor': source_anchor_label,
+            'source_diff': source_diff_label,
+ 
+            'target_anchor': gim_anchor_label,
+            'target_diff': gim_diff_label,
+            
+            'gim_anchor': gim_anchor_label,
+            'gim_diff': gim_diff_label,
+        }
+        return data, label
+        

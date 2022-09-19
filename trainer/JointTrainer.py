@@ -17,86 +17,61 @@ DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 
 class Workers(nn.Module):
-    def __init__(self, encoder, ds_gens, embed_size) -> None:
+    def __init__(self, encoder, ds_gen, embed_size) -> None:
         super().__init__()
 
         self.encoder = encoder
-        self.ds_gens = ds_gens
+        self.ds_gen = ds_gen
 
         self.gim = GIM(embed_size=embed_size, device=Config.DEVICE)
         self.lim = LIM(embed_size=embed_size, device=Config.DEVICE)
-        self.proj = Head(embed_size=embed_size, feat_dim=128)
+        self.proj = Head(embed_size=embed_size, feat_dim=512)
 
-        self.sup_loss = AngleProtoLoss()
+        self.sup_loss = SubConLoss()
 
-    def train_SUP(self, source_data):
-        data_anchor, data_pos = source_data[0].to(
-            Config.DEVICE), source_data[1].to(Config.DEVICE)
-        data = torch.cat([data_anchor, data_pos], dim=0)
-        feat = self.proj(self.encoder(data))
-        bz = data_anchor.size()[0]
+    def forward_SUP(self, anchor, same, label):
+        bz = anchor.shape[0]
+        feat = self.proj(torch.cat([anchor, same], dim = 0))
+        f1, f2 = torch.split(feat, [bz, bz], dim = 0)
+        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
+        return self.sup_loss(feat, label.to(Config.DEVICE))
 
-        feat_anchor, feat_pos = torch.split(feat, [bz, bz], dim=0)
-        feat = torch.cat([feat_anchor.unsqueeze(
-            1), feat_pos.unsqueeze(1)], dim=1)
-
-        return self.sup_loss(feat)[0]
-
-    def train_LIM(self, target_data):
-        data_anchor, data_pos, data_neg = target_data[0].to(
-            Config.DEVICE), target_data[1].to(Config.DEVICE), target_data[2].to(Config.DEVICE)
-
-        feat_anchor, feat_pos, feat_neg = self.encoder(
-            data_anchor), self.encoder(data_pos), self.encoder(data_neg)
+    def forward_LIM(self, feat_anchor, feat_pos, feat_neg):
         return self.lim(feat_anchor, feat_pos, feat_neg)
 
-    def train_GIM(self, gim_data):
-        data_anchor, data_pos, data_neg = gim_data[0].to(
-            Config.DEVICE), gim_data[1].to(Config.DEVICE), gim_data[2].to(Config.DEVICE)
-
-        feat_anchor, feat_pos, feat_neg = self.encoder(
-            data_anchor), self.encoder(data_pos), self.encoder(data_neg)
+    def forward_GIM(self, feat_anchor, feat_pos, feat_neg):
         return self.gim(feat_anchor, feat_pos, feat_neg)
 
-    def train_subCon(self, segs, augs, bz, nviews):
-        outp_segs = self.worker_subcon(self.get_fbank(segs, aug=False))
-        outp_augs = self.worker_subcon(self.get_fbank(augs, aug=True))
-
-        outp = torch.cat([outp_segs, outp_augs], dim=0)
-        outp = torch.cat([d.unsqueeze(1)
-                         for d in torch.split(outp, [bz] * nviews, dim=0)], dim=1)
-        loss = self.loss_subcon(outp)
-        return loss
+    def forward_encoder(self, data):
+        return {
+            key: self.encoder(value.to(Config.DEVICE)) for key, value in data
+        }
 
     def start_train(self):
 
-        source_gen, target_gen, gim_gen = self.ds_gens[
-            'source_gen'], self.ds_gens['target_gen'], self.ds_gens['gim_gen']
-
-        source_data, _ = next(source_gen)
-        target_data, _ = next(target_gen)
-        gim_data, _ = next(gim_gen)
+        data, label = next(self.ds_gen)
+        embeds = self.forward_encoder(data)
 
         return {
-            'SUP': self.train_SUP(source_data),
-            'LIM': self.train_LIM(target_data),
-            'GIM': self.train_GIM(gim_data),
+            'SUP': self.forward_SUP(embeds['source_anchor'], embeds['source_same'], label['source_anchor']),
+            'LIM': self.forward_LIM(embeds['target_anchor'], embeds['target_same'], embeds['target_diff']),
+            'GIM': self.forward_GIM(embeds['gim_anchor'], embeds['gim_same'], embeds['gim_diff']),
         }
 
 
 class JointTrainer(ModelTrainer):
-    def __init__(self, model_name, source_gen, target_gen):
+    def __init__(self, model_name, ds_gen):
         super().__init__(model_name)
 
         # model
         self.encoder = importlib.import_module(
             'models').__getattribute__(model_name)
-        self.model = Workers(self.encoder, embed_size=192,
-                             source_gen=source_gen, target_gen=target_gen)
+        self.model = Workers(self.encoder, embed_size=192, ds_gen=ds_gen)
         self.model.to(DEVICE)
 
         # optimizer
-        self.optim = optim.Adam(self.model.parameters(), lr=Config.LEARNING_RATE)
+        self.optim = optim.Adam(self.model.parameters(),
+                                lr=Config.LEARNING_RATE)
 
     def train_network(self, loader=None, epoch=None):
 

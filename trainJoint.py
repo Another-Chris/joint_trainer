@@ -1,5 +1,5 @@
 import torch
-from loader.train import GIMDatasetLoader
+from loader.train import GIMDatasetLoader, JointLoader
 from tuneThreshold import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
 from loader import TrainDatasetLoader
 from trainer import JointTrainer
@@ -38,65 +38,29 @@ def inf_train_gen(loader):
 
 
 if __name__ == "__main__":
-    source_ds = TrainDatasetLoader(
-        train_list=SOURCE_LIST,
-        train_path=SOURCE_PATH,
+    
+    
+    joint_ds = JointLoader(
+        source_list=SOURCE_LIST,
+        source_path=SOURCE_PATH,
+        target_list=TARGET_LIST,
+        target_path=TARGET_PATH,
         augment=True,
         musan_path=Config.MUSAN_PATH,
         rir_path=Config.RIR_PATH,
         max_frames=Config.MAX_FRAMES
     )
-    source_loader = torch.utils.data.DataLoader(
-        source_ds,
+    joint_loader = torch.utils.data.DataLoader(
+        joint_ds,
         batch_size=Config.BATCH_SIZE,
         shuffle=True,
         num_workers=2,
         drop_last=True,
     )
-
-    target_ds = TrainDatasetLoader(
-        train_list=TARGET_LIST,
-        train_path=TARGET_PATH,
-        augment=True,
-        musan_path=Config.MUSAN_PATH,
-        rir_path=Config.RIR_PATH,
-        max_frames=Config.MAX_FRAMES
-    )
-    target_loader = torch.utils.data.DataLoader(
-        target_ds,
-        batch_size=Config.BATCH_SIZE,
-        shuffle=True,
-        num_workers=2,
-        drop_last=True,
-    )
-
-    gim_ds = GIMDatasetLoader(
-        train_list=TARGET_LIST,
-        train_path=TARGET_PATH,
-        augment=True,
-        musan_path=Config.MUSAN_PATH,
-        rir_path=Config.RIR_PATH,
-        max_frames=Config.MAX_FRAMES
-    )
-    gim_loader = torch.utils.data.DataLoader(
-        source_ds,
-        batch_size = Config.BATCH_SIZE // 5, # 5 segments 
-        shuffle=True,
-        num_workers=2,
-        drop_last=True,
-    )
-    
-    
-    ds_gens = {
-        "source_gen": inf_train_gen(source_loader),
-        "target_gen": inf_train_gen(target_loader),
-        "gim_gen": inf_train_gen(gim_loader)
-    }
-
-    
+      
     trainer = JointTrainer(
         model_name=MODEL_NAME, 
-        ds_gens = ds_gens
+        ds_gen = inf_train_gen(joint_loader)
         )
     
     trainer.encoder.load_state_dict(

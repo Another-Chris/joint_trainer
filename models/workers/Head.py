@@ -1,13 +1,11 @@
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class Head(nn.Module):
     """backbone + projection head"""
 
-    def __init__(self, encoder, dim_in, head='mlp', feat_dim=128, **kwargs):
+    def __init__(self, dim_in, head='mlp', feat_dim=128, **kwargs):
         super().__init__(**kwargs)
-        self.encoder = encoder
         if head == 'linear':
             self.head = nn.Linear(dim_in, feat_dim)
         elif head == 'mlp':
@@ -21,7 +19,4 @@ class Head(nn.Module):
                 'head not supported: {}'.format(head))
 
     def forward(self, x):
-        feat = self.encoder(x)
-        feat = self.head(feat)
-        feat = F.normalize(feat, dim=1)
-        return feat
+        return self.head(x)

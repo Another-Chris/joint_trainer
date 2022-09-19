@@ -1,4 +1,5 @@
 import torch
+from loader.train import GIMDatasetLoader
 from tuneThreshold import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
 from loader import TrainDatasetLoader
 from trainer import JointTrainer
@@ -45,6 +46,13 @@ if __name__ == "__main__":
         rir_path=Config.RIR_PATH,
         max_frames=Config.MAX_FRAMES
     )
+    source_loader = torch.utils.data.DataLoader(
+        source_ds,
+        batch_size=Config.BATCH_SIZE,
+        shuffle=True,
+        num_workers=2,
+        drop_last=True,
+    )
 
     target_ds = TrainDatasetLoader(
         train_list=TARGET_LIST,
@@ -54,14 +62,6 @@ if __name__ == "__main__":
         rir_path=Config.RIR_PATH,
         max_frames=Config.MAX_FRAMES
     )
-
-    source_loader = torch.utils.data.DataLoader(
-        source_ds,
-        batch_size=Config.BATCH_SIZE,
-        shuffle=True,
-        num_workers=2,
-        drop_last=True,
-    )
     target_loader = torch.utils.data.DataLoader(
         target_ds,
         batch_size=Config.BATCH_SIZE,
@@ -69,10 +69,34 @@ if __name__ == "__main__":
         num_workers=2,
         drop_last=True,
     )
+
+    gim_ds = GIMDatasetLoader(
+        train_list=TARGET_LIST,
+        train_path=TARGET_PATH,
+        augment=True,
+        musan_path=Config.MUSAN_PATH,
+        rir_path=Config.RIR_PATH,
+        max_frames=Config.MAX_FRAMES
+    )
+    gim_loader = torch.utils.data.DataLoader(
+        source_ds,
+        batch_size = Config.BATCH_SIZE // 5, # 5 segments 
+        shuffle=True,
+        num_workers=2,
+        drop_last=True,
+    )
+    
+    
+    ds_gens = {
+        "source_gen": inf_train_gen(source_loader),
+        "target_gen": inf_train_gen(target_loader),
+        "gim_gen": inf_train_gen(gim_loader)
+    }
+
+    
     trainer = JointTrainer(
         model_name=MODEL_NAME, 
-        source_gen=inf_train_gen(source_loader), 
-        target_gen=inf_train_gen(target_loader)
+        ds_gens = ds_gens
         )
     
     trainer.encoder.load_state_dict(

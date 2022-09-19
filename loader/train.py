@@ -1,5 +1,7 @@
 from .utils import load_wav
 from .augment import AugmentWAV
+from utils import Config
+
 
 import random
 import os
@@ -7,8 +9,7 @@ import os
 import numpy as np
 
 
-class TrainDatasetLoader():
-
+class DsLoader():
     def __init__(self, train_list, augment, musan_path, rir_path, max_frames, train_path):
         self.augment_wav = AugmentWAV(
             musan_path=musan_path, rir_path=rir_path, max_frames=max_frames)
@@ -40,7 +41,7 @@ class TrainDatasetLoader():
 
             self.data_label.append(speaker_label)
             self.data_list.append(filename)
-
+            
     def augment_audio(self, audio):
         augtype = random.randint(0, 4)
         if augtype == 1:
@@ -51,18 +52,44 @@ class TrainDatasetLoader():
             audio = self.augment_wav.additive_noise('speech', audio)
         elif augtype == 4:
             audio = self.augment_wav.additive_noise('noise', audio)
-        return audio
-
+        return audio 
+    
     def __len__(self):
         return len(self.data_list)
 
-    def __getitem__(self, idx):
+class TrainDatasetLoader(DsLoader):
+
+    def __init__(self) -> None:
+        super(TrainDatasetLoader).__init__()
         
+    def __getitem__(self, idx):
+
         anchor = self.augment_audio(load_wav(
             self.data_list[idx], self.max_frames, evalmode=False))
         same = self.augment_audio(load_wav(
             self.data_list[idx], self.max_frames, evalmode=False))
         diff = self.augment_audio(load_wav(
             self.data_list[np.random.choice([i for i in range(len(self.data_list)) if i != idx], 1)[0]], self.max_frames, evalmode=False))
+
+        return [anchor, same, diff], self.data_label[idx]
+
+
+class GIMDatasetLoader(DsLoader):
+
+    def __init__(self) -> None:
+        super(TrainDatasetLoader).__init__()
         
+    def __getitem__(self, idx):
+
+        anchor = self.augment_audio(load_wav(
+            self.data_list[idx], self.max_frames, evalmode=True, num_eval = Config.GIM_SEGS))
+        same = self.augment_audio(load_wav(
+            self.data_list[idx], self.max_frames, evalmode=True, num_eval = Config.GIM_SEGS))
+        diff = self.augment_audio(load_wav(
+            self.data_list[np.random.choice([i for i in range(len(self.data_list)) if i != idx], 1)[0]], 
+            self.max_frames, 
+            evalmode=True, 
+            num_eval = Config.GIM_SEGS
+            ))
+
         return [anchor, same, diff], self.data_label[idx]

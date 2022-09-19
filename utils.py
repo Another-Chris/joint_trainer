@@ -15,6 +15,7 @@ import librosa.display
 
 
 class Config():
+    GIM_SEGS = 5
     MAX_EPOCH = 20
     TEST_INTERVAL = 5
     BATCH_SIZE = 32
@@ -23,6 +24,7 @@ class Config():
     DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     NUM_CLASSES = 5994
     MAX_FRAMES = 200
+    LEARNING_RATE = 1e-4
 
 def plot_batch(batch):
     batch = batch.detach().cpu().numpy()

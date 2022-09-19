@@ -3,5 +3,6 @@ from .encoders.ECAPA_TDNN import MainModel as ECAPA_TDNN
 from .encoders.pase.models.frontend import wf_builder as PASE
 from .workers.Head import Head
 from .transforms import FbankAug, Torchfbank, TorchMFCC
-from .workers.InfoMax import GIM, LIM
-from .workers.Cls import Cls
+from .workers.GIM import GIM
+from .workers.LIM import LIM
+from .workers.Sup import Cls

@@ -5,4 +5,3 @@ from .workers.Head import Head
 from .transforms import FbankAug, Torchfbank, TorchMFCC
 from .workers.GIM import GIM
 from .workers.LIM import LIM
-from .workers.Sup import Cls

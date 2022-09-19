@@ -1,7 +1,6 @@
 import torch
-from loader.train import GIMDatasetLoader, JointLoader
+from loader.train import JointLoader
 from tuneThreshold import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
-from loader import TrainDatasetLoader
 from trainer import JointTrainer
 from pathlib import Path
 from utils import Config
@@ -38,8 +37,6 @@ def inf_train_gen(loader):
 
 
 if __name__ == "__main__":
-    
-    
     joint_ds = JointLoader(
         source_list=SOURCE_LIST,
         source_path=SOURCE_PATH,
@@ -54,11 +51,12 @@ if __name__ == "__main__":
         joint_ds,
         batch_size=Config.BATCH_SIZE,
         shuffle=True,
-        num_workers=2,
+        num_workers=Config.NUM_WORKERS,
         drop_last=True,
     )
       
     trainer = JointTrainer(
+        exp_name = EXP_NAME,
         model_name=MODEL_NAME, 
         ds_gen = inf_train_gen(joint_loader)
         )
@@ -70,7 +68,7 @@ if __name__ == "__main__":
     # core training script
     for it in range(1, Config.MAX_EPOCH + 1):
         print(f'epoch {it}')
-        loss = trainer.train_network()
+        loss = trainer.train_network(epoch = it - 1)
         
         loss_val_dict = loss
         desc = f"EPOCH {it}: "

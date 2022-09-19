@@ -17,8 +17,10 @@ import librosa.display
 class Config():
     GIM_SEGS = 5
     MAX_EPOCH = 20
-    TEST_INTERVAL = 5
+    TEST_INTERVAL = 1
     BATCH_SIZE = 32
+    NUM_WORKERS = 6
+    LEARNING_RATE = 1e-4
     MUSAN_PATH = "./data/musan_split"
     RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"    
     DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'

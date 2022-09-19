@@ -34,7 +34,7 @@ if __name__ == "__main__":
         augment=True,
         musan_path=Config.MUSAN_PATH,
         rir_path=Config.RIR_PATH,
-        max_frames=200,
+        max_frames=Config.MAX_FRAMES,
     )
     loader = torch.utils.data.DataLoader(
         ds,

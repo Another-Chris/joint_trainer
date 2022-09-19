@@ -80,7 +80,9 @@ class PreEmphasis(torch.nn.Module):
         )
 
     def forward(self, input: torch.tensor) -> torch.tensor:
-        input = input.unsqueeze(1)
+        # expected shape: [bz, 1, siglen]
+        if len(input.size()) == 2:
+            input = input.unsqueeze(1)
         input = F.pad(input, (1, 0), 'reflect')
         return F.conv1d(input, self.flipped_filter).squeeze(1)
 
@@ -155,7 +157,7 @@ class ECAPA_TDNN(nn.Module):
         self.bn6 = nn.BatchNorm1d(192)
 
 
-    def forward(self, x, aug):
+    def forward(self, x, aug = True):
         with torch.no_grad():
             x = self.torchfbank(x)+1e-6
             x = x.log()   
@@ -188,7 +190,7 @@ class ECAPA_TDNN(nn.Module):
         x = self.fc6(x)
         x = self.bn6(x)
 
-        return 
+        return x
     
     
 def MainModel():

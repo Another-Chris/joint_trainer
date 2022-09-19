@@ -14,7 +14,6 @@ except ImportError:
     from .tdnn import TDNN
 
 
-
 def wf_builder(cfg_path):
     if cfg_path is not None:
         if isinstance(cfg_path, str):
@@ -43,6 +42,7 @@ def wf_builder(cfg_path):
 class TDNNFe(Model):
     """ Time-Delayed Neural Network front-end
     """
+
     def __init__(self, num_inputs=1,
                  sincnet=True,
                  kwidth=641, stride=160,
@@ -55,7 +55,7 @@ class TDNNFe(Model):
                  rnn_dropout=0,
                  rnn_type='qrnn',
                  name='TDNNFe'):
-        super().__init__(name=name) 
+        super().__init__(name=name)
         # apply sincnet at first layer
         self.sincnet = sincnet
         self.emb_dim = emb_dim
@@ -88,9 +88,9 @@ class TDNNFe(Model):
 
         # batch possible chunk and contexts, or just forward non-dict tensor
         x, data_fmt = format_frontend_chunk(batch, device)
-        if hasattr(self, 'feblock'): 
+        if hasattr(self, 'feblock'):
             h = self.feblock(x)
-        
+
         h = self.tdnn(h)
 
         if self.rnn_pool:
@@ -113,14 +113,16 @@ class TDNNFe(Model):
             return select_output(h, mode=mode)
         """
 
+
 class WaveFe(Model):
     """ Convolutional front-end to process waveforms
         into a decimated intermediate representation 
     """
-    def __init__(self, num_inputs=1, 
+
+    def __init__(self, num_inputs=1,
                  sincnet=True,
-                 kwidths=[251, 10, 5, 5, 5, 5, 5, 5], 
-                 strides=[1, 10, 2, 1, 2, 1, 2, 2], 
+                 kwidths=[251, 10, 5, 5, 5, 5, 5, 5],
+                 strides=[1, 10, 2, 1, 2, 1, 2, 2],
                  dilations=[1, 1, 1, 1, 1, 1, 1, 1],
                  fmaps=[64, 64, 128, 128, 256, 256, 512, 512],
                  norm_type='bnorm',
@@ -141,7 +143,7 @@ class WaveFe(Model):
                  denseskips=False,
                  densemerge='sum',
                  name='WaveFe'):
-        super().__init__(name=name) 
+        super().__init__(name=name)
         # apply sincnet at first layer
         self.sincnet = sincnet
         self.kwidths = kwidths
@@ -155,16 +157,16 @@ class WaveFe(Model):
         assert len(strides) == len(fmaps)
         concat_emb_dim = emb_dim
         ninp = num_inputs
-        for n, (kwidth, stride, dilation, fmap) in enumerate(zip(kwidths, 
+        for n, (kwidth, stride, dilation, fmap) in enumerate(zip(kwidths,
                                                                  strides,
                                                                  dilations,
-                                                                 fmaps), 
+                                                                 fmaps),
                                                              start=1):
             if n > 1:
                 # make sure sincnet is deactivated after first layer
                 sincnet = False
             if resblocks and not sincnet:
-                feblock = FeResBlock(ninp, fmap, kwidth, 
+                feblock = FeResBlock(ninp, fmap, kwidth,
                                      downsample=stride,
                                      act=activation,
                                      pad_mode=pad_mode, norm_type=norm_type)
@@ -178,7 +180,7 @@ class WaveFe(Model):
                                   sr=sr)
             self.blocks.append(feblock)
             if denseskips and n < len(kwidths):
-                # add projection adapter 
+                # add projection adapter
                 self.denseskips.append(nn.Conv1d(fmap, emb_dim, 1, bias=False))
                 if densemerge == 'concat':
                     concat_emb_dim += emb_dim
@@ -230,7 +232,7 @@ class WaveFe(Model):
             return input_ + skip
         else:
             raise TypeError('Unknown densemerge: ', self.densemerge)
-        
+
     def forward(self, batch, device=None, mode=None):
         # batch possible chunk and contexts, or just forward non-dict tensor
         x, data_fmt = format_frontend_chunk(batch, device)
@@ -257,8 +259,8 @@ class WaveFe(Model):
             h = h.transpose(1, 2).transpose(0, 1)
             h, _ = self.rnn(h)
             h = h.transpose(0, 1).transpose(1, 2)
-            #y = self.W(h) 
-        #else:
+            #y = self.W(h)
+        # else:
         y = self.W(h)
         if denseskips:
             for dskip in dskips:
@@ -281,7 +283,22 @@ class WaveFe(Model):
 
 class aspp_res_encoder(Model):
 
-    def __init__(self, sinc_out, hidden_dim, kernel_sizes=[11, 11, 11, 11], sinc_kernel=251,sinc_stride=1,strides=[10, 4, 2, 2], dilations=[1, 6, 12, 18], fmaps=48, name='aspp_encoder', pool2d=False, rnn_pool=False, rnn_add=False, concat=[False, False, False, True], dense=False):
+    def __init__(self, 
+                sinc_out, 
+                hidden_dim, 
+                kernel_sizes=[11, 11, 11, 11], 
+                sinc_kernel=251, 
+                sinc_stride=1, 
+                strides=[10, 4, 2, 2], 
+                dilations=[1, 6, 12, 18], 
+                fmaps=48, 
+                name='aspp_encoder', 
+                pool2d=False, 
+                rnn_pool=False, 
+                rnn_add=False, 
+                concat=[False, False, False, True], 
+                dense=False
+                ):
         super().__init__(name=name)
         self.sinc = SincConv_fast(1, sinc_out, sinc_kernel,
                                   sample_rate=16000,
@@ -290,20 +307,21 @@ class aspp_res_encoder(Model):
                                   pad_mode='reflect'
                                   )
 
-
         self.ASPP_blocks = nn.ModuleList()
 
         for i in range(len(kernel_sizes)):
             if i == 0:
-                self.ASPP_blocks.append(aspp_resblock(sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps[i], pool2d[i], dense))
+                self.ASPP_blocks.append(aspp_resblock(
+                    sinc_out, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps[i], pool2d[i], dense))
             else:
-                self.ASPP_blocks.append(aspp_resblock(hidden_dim, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps[i], pool2d[i], dense))
-
+                self.ASPP_blocks.append(aspp_resblock(
+                    hidden_dim, hidden_dim, kernel_sizes[i], strides[i], dilations, fmaps[i], pool2d[i], dense))
 
         self.rnn_pool = rnn_pool
         self.rnn_add = rnn_add
         self.concat = concat
-        assert ((self.rnn_pool and self.rnn_add) or not self.rnn_pool) or self.rnn_pool
+        assert ((self.rnn_pool and self.rnn_add)
+                or not self.rnn_pool) or self.rnn_pool
 
         if rnn_pool:
             self.rnn = build_rnn_block(hidden_dim, hidden_dim // 2,
@@ -313,10 +331,7 @@ class aspp_res_encoder(Model):
                                        dropout=0)
             self.W = nn.Conv1d(hidden_dim, hidden_dim, 1)
 
-
         self.emb_dim = hidden_dim
-
-
 
     def forward(self, batch, device=None, mode=None):
 
@@ -352,16 +367,16 @@ class aspp_res_encoder(Model):
 
         return format_frontend_output(h, data_fmt, mode)
 
-
     def fuse(self, out):
         last_feature = out[-1]
         for i in range(len(out) - 1):
             out[i] = F.adaptive_avg_pool1d(out[i], last_feature.shape[-1])
         return out
 
+
 class Resnet50_encoder(Model):
 
-    def __init__(self, sinc_out, hidden_dim, sinc_kernel=251, sinc_stride=1, conv_stride=5, kernel_size=21, pretrained=True,name="Resnet50"):
+    def __init__(self, sinc_out, hidden_dim, sinc_kernel=251, sinc_stride=1, conv_stride=5, kernel_size=21, pretrained=True, name="Resnet50"):
         super().__init__(name=name)
         self.sinc = SincConv_fast(1, sinc_out, sinc_kernel,
                                   sample_rate=16000,
@@ -370,7 +385,7 @@ class Resnet50_encoder(Model):
                                   pad_mode='reflect'
                                   )
 
-        self.conv1 = nn.Sequential(nn.Conv2d(1, 64, kernel_size=kernel_size, stride=conv_stride, padding= kernel_size // 2, bias=False),
+        self.conv1 = nn.Sequential(nn.Conv2d(1, 64, kernel_size=kernel_size, stride=conv_stride, padding=kernel_size // 2, bias=False),
                                    nn.BatchNorm2d(64),
                                    nn.ReLU(64))
 
@@ -381,10 +396,10 @@ class Resnet50_encoder(Model):
                                     resnet.layer4
                                     )
 
-        self.conv2 = nn.Sequential(nn.Conv2d(512, 256, kernel_size=[2, 1], stride=1, bias=False))
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(512, 256, kernel_size=[2, 1], stride=1, bias=False))
 
         self.emb_dim = hidden_dim
-
 
     def forward(self, batch, device=None, mode=None):
 
@@ -403,9 +418,8 @@ class Resnet50_encoder(Model):
 
         # print(res_out.shape)
 
-        h =self.conv2(res_out).squeeze(2)
+        h = self.conv2(res_out).squeeze(2)
 
         # print(h.shape)
 
         return format_frontend_output(h, data_fmt, mode)
-

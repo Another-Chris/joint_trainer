@@ -39,9 +39,9 @@ def compute_one_score(all_scores, all_labels, all_trials, line, feats, num_eval)
     
 
 class ModelTrainer(object):
-    def __init__(self, model):
+    def __init__(self, exp_name):
 
-        self.writer = SummaryWriter(log_dir=f"./logs/{model}_sup/{time.time()}")
+        self.writer = SummaryWriter(log_dir=f"./logs/{exp_name}/{time.time()}")
 
     def evaluateFromList(self, test_list, test_path, num_eval=10):
 

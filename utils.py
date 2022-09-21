@@ -16,10 +16,10 @@ import librosa.display
 
 class Config():
     GIM_SEGS = 5
-    MAX_EPOCH = 20
-    TEST_INTERVAL = 1
+    MAX_EPOCH = 200
+    TEST_INTERVAL = 10
+    NUM_WORKERS = 5
     BATCH_SIZE = 32
-    NUM_WORKERS = 6
     LEARNING_RATE = 1e-4
     MUSAN_PATH = "./data/musan_split"
     RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"    

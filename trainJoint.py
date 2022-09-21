@@ -1,16 +1,19 @@
-import torch
+from eval import evaluate
 from loader.train import JointLoader
 from tuneThreshold import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
 from trainer import JointTrainer
 from pathlib import Path
 from utils import Config
 
+import torch
 import torch.cuda
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
 EXP_NAME = f"{MODEL_NAME}_infoMax"
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
+PRE_TRAINED = f"./pre_trained/{MODEL_NAME}.model"
+# PRE_TRAINED = f"./{MODEL_SAVE_PATH}/model-20.model"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
 TARGET_LIST = './data/cnceleb_train.txt'
@@ -19,15 +22,6 @@ TEST_LIST = './data/cnceleb_test.txt'
 TEST_PATH = './data/cnceleb/eval'
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
-
-def evaluate(trainer):
-    sc, lab, _ = trainer.evaluateFromList(
-        test_list=TEST_LIST, test_path=TEST_PATH, num_eval=10
-    )
-    _, eer, _, _ = tuneThresholdfromScore(sc, lab, [1, 0.1])
-    fnrs, fprs, thresholds = ComputeErrorRates(sc, lab)
-    mindcf, _ = ComputeMinDcf(fnrs, fprs, thresholds, 0.05, 1, 1)
-    return eer, mindcf
 
 
 def inf_train_gen(loader):
@@ -62,7 +56,7 @@ if __name__ == "__main__":
         )
     
     trainer.encoder.load_state_dict(
-        torch.load(f"./pre_trained/{MODEL_NAME}.model"))
+        torch.load(PRE_TRAINED))
     print(f'pretrained {MODEL_NAME} loaded!')
 
     # core training script
@@ -77,11 +71,11 @@ if __name__ == "__main__":
             desc += f" {key} = {val :.4f}"
 
         mpath = f'{MODEL_SAVE_PATH}/model-{it}.model'
-        trainer.saveParameters(mpath)
+        torch.save(trainer.encoder.state_dict(), mpath)
         print(desc)
 
         if it % Config.TEST_INTERVAL == 0:
-            eer, mindcf = evaluate(trainer)
+            eer, mindcf = evaluate(trainer.encoder)
             print(f'\n Epoch {it}, VEER {eer:.4f}, MinDCF: {mindcf:.5f}')
             trainer.writer.add_scalar('Eval/EER', eer, it)
             trainer.writer.add_scalar('Eval/MinDCF', mindcf, it)

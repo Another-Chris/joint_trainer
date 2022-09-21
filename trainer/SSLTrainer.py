@@ -2,8 +2,10 @@ from models import Head, ECAPA_TDNN_WITH_FBANK
 from tqdm import tqdm
 from loss import SupConLoss
 from utils import Config
+from torch.utils.tensorboard import SummaryWriter
 
 import torch
+import time
 import sys
 import torch.nn as nn
 import torch.nn.functional as F
@@ -38,8 +40,9 @@ class Workers(nn.Module):
 class SSLTrainer(torch.nn.Module):
     def __init__(self, exp_name):
         super().__init__(exp_name)
-
-        # model
+        
+        self.writer = SummaryWriter(log_dir=f"./logs/{exp_name}/{time.time()}")
+        
         self.encoder = ECAPA_TDNN_WITH_FBANK()
         self.model = Workers(self.encoder,embed_size=192)
         self.model.to(Config.DEVICE)

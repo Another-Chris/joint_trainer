@@ -1,10 +1,10 @@
-import torch
 from loader import SimpleDataLoader
-from tuneThreshold import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
 from trainer import SSLTrainer
 from pathlib import Path
 from utils import Config
+from eval import evaluate
 
+import torch
 import torch.cuda
 torch.cuda.empty_cache()
 
@@ -19,16 +19,6 @@ TEST_LIST = './data/voxceleb_test.txt'
 TEST_PATH = './data/voxceleb1/'
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
-
-def evaluate(trainer):
-    sc, lab, _ = trainer.evaluateFromList(
-        test_list=TEST_LIST, test_path=TEST_PATH, num_eval=10
-    )
-    _, eer, _, _ = tuneThresholdfromScore(sc, lab, [1, 0.1])
-    fnrs, fprs, thresholds = ComputeErrorRates(sc, lab)
-    mindcf, _ = ComputeMinDcf(fnrs, fprs, thresholds, 0.05, 1, 1)
-    return eer, mindcf
-
 
 if __name__ == "__main__":
     ds = SimpleDataLoader(

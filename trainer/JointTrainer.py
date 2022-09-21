@@ -14,13 +14,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 sys.path.append('..')
 
-
-def make_labels(y):
-    bsz = y.size(0) // 2
-    slen = y.size(1)
-    label = torch.cat((torch.ones(bsz, slen, requires_grad=False), torch.zeros(bsz, slen, requires_grad=False)), dim=0)
-    return label
-
 class Workers(nn.Module):
     def __init__(self, encoder, ds_gen, embed_size) -> None:
         super().__init__()
@@ -32,7 +25,7 @@ class Workers(nn.Module):
         self.lim = LIM(embed_size=embed_size, device=Config.DEVICE)
         self.proj = Head(dim_in=embed_size, feat_dim=512)
 
-        self.sup_loss = SubConLoss()
+        self.sup_loss = SupConLoss()
 
     def forward_SUP(self, anchor, same, label):
         bz = anchor.shape[0]

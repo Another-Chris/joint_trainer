@@ -3,7 +3,6 @@ from .utils import load_wav
 from .augment import AugmentWAV
 from utils import Config
 
-import random
 import os
 import torch
 
@@ -151,14 +150,12 @@ class SourceDataLoader(DsLoader):
         return {key: torch.FloatTensor(value) for key, value in data.items()}, label
 
 # a pair of augmented data
-
-
 class SimpleDataLoader(DsLoader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def __getitem__(self, idx):
-
+        
         return {
             'anchor': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))),
             'pos': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False)))

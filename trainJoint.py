@@ -3,7 +3,7 @@ from loader.train import JointLoader
 from tuneThreshold import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
 from trainer import JointTrainer
 from pathlib import Path
-from utils import Config
+from utils import Config, inf_train_gen
 
 import torch
 import torch.cuda
@@ -22,12 +22,6 @@ TEST_LIST = './data/cnceleb_test.txt'
 TEST_PATH = './data/cnceleb/eval'
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
-
-
-def inf_train_gen(loader):
-    while True:
-        for data, label in loader:
-            yield data, label
 
 
 if __name__ == "__main__":

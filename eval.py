@@ -15,8 +15,8 @@ import numpy as np
 
 sys.path.append("..")
 
-TEST_LIST = './data/cnceleb_test.txt'
-TEST_PATH = './data/cnceleb/eval'
+TEST_LIST = Config.TEST_LIST
+TEST_PATH = Config.TEST_PATH
 MODEL_NAME = 'ECAPA_TDNN'
 PRE_TRAINED = './save/ECAPA_TDNN_infoMax/model-1.model'
 NUM_WORKERS = 1

@@ -1,6 +1,6 @@
 from models import Head, PASE
 from tqdm import tqdm
-from loss import SubConLoss
+from loss import SupConLoss
 from utils import Config
 
 import torch
@@ -23,7 +23,7 @@ class Workers(nn.Module):
         self.dis_gim = Head(dim_in = pase_frames, feat_dim = 128)
         self.dis_lim = Head(dim_in = pase_frames, feat_dim = 128)
         self.proj = Head(dim_in = embed_size, feat_dim = 128)
-        self.encoder_loss = SubConLoss()
+        self.encoder_loss = SupConLoss()
         
     def forward_LIM(self, anchor, pos, neg):
         bz = anchor.size()[0]
@@ -68,7 +68,7 @@ class Workers(nn.Module):
         }
 
 
-class JointTrainer(torch.nn.Module):
+class PASETrainer(torch.nn.Module):
     def __init__(self, exp_name, model_name):
         super().__init__(exp_name)
 

@@ -19,19 +19,27 @@ class Config():
     MAX_EPOCH = 200
     TEST_INTERVAL = 10
     NUM_WORKERS = 5
-    BATCH_SIZE = 32
-    LEARNING_RATE = 1e-4
-    MUSAN_PATH = "./data/musan_split"
-    RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"    
-    DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    BATCH_SIZE = 128
     NUM_CLASSES = 5994
     MAX_FRAMES = 200
-    LEARNING_RATE = 1e-4
+    LEARNING_RATE = 1e-3
+    MUSAN_PATH = "./data/musan_split"
+    RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"    
+    TEST_PATH = "./data/voxceleb1_test/"
+    TEST_LIST = "./data/voxceleb_test.txt"
+    DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 def plot_batch(batch):
     batch = batch.detach().cpu().numpy()
     librosa.display.specshow(batch[0])
     plt.show()
+    
+
+def inf_train_gen(loader):
+    while True:
+        for data, label in loader:
+            yield data, label
+
 
 
 def save_scripts(result_save_path, configs):

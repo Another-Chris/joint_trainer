@@ -1,12 +1,14 @@
 from models import GIM, LIM, Head
-from .ModelTrainer import ModelTrainer
 from tqdm import tqdm
 from loss import SupConLoss
 from utils import Config
+from torch.utils.tensorboard import SummaryWriter
 
 import torch
+import time
 import importlib
 import sys
+
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -34,7 +36,7 @@ class Workers(nn.Module):
 
     def forward_SUP(self, anchor, same, label):
         bz = anchor.shape[0]
-        feat = F.normalize(self.proj(torch.cat([anchor, same], dim = 0)))
+        feat = F.normalize(self.proj(F.normalize(torch.cat([anchor, same], dim = 0))))
         f1, f2 = torch.split(feat, [bz, bz], dim = 0)
         feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
         return self.sup_loss(feat, label.to(Config.DEVICE))
@@ -66,10 +68,12 @@ class Workers(nn.Module):
         }
 
 
-class JointTrainer(ModelTrainer):
+class JointTrainer(torch.nn.Module):
     def __init__(self, exp_name, model_name, ds_gen):
-        super().__init__(exp_name)
-
+        super().__init__()
+        
+        self.writer = SummaryWriter(log_dir=f"./logs/{exp_name}/{time.time()}")
+        
         # model
         self.encoder = importlib.import_module(
             'models').__getattribute__(model_name)()
@@ -85,7 +89,7 @@ class JointTrainer(ModelTrainer):
         self.model.train()
         loss_val_dict = {}
 
-        steps = 512
+        steps = 1024
         pbar = tqdm(range(steps))
 
         for step in pbar:
@@ -113,7 +117,7 @@ class JointTrainer(ModelTrainer):
 
             desc += f" {loss = :.3f}"
             pbar.set_description(desc)
-
+            
         loss_val_dict = {key: value/steps for key,
                          value in loss_val_dict.items()}
         return loss_val_dict

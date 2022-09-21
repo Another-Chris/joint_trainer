@@ -1,7 +1,6 @@
 #! /usr/bin/python
 # -*- encoding: utf-8 -*-
 
-from tkinter import EXCEPTION
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

@@ -1,7 +1,7 @@
+from audioop import maxpp
 from .utils import load_wav
 from .augment import AugmentWAV
 from utils import Config
-
 
 import random
 import os
@@ -60,15 +60,15 @@ class DsLoader():
         self.augment = augment
 
     def augment_audio(self, audio):
-        augtype = random.randint(0, 4)
-        if augtype == 1:
+        if np.random.random() < 0.5:
             audio = self.augment_wav.reverberate(audio)
-        elif augtype == 2:
+        if np.random.random() < 0.2:
             audio = self.augment_wav.additive_noise('music', audio)
-        elif augtype == 3:
+        if np.random.random() < 0.2:
             audio = self.augment_wav.additive_noise('speech', audio)
-        elif augtype == 4:
+        if np.random.random() < 0.2:
             audio = self.augment_wav.additive_noise('noise', audio)
+
         return audio
 
     def __len__(self):
@@ -86,7 +86,7 @@ class DsLoader():
         diff = self.augment_audio(load_wav(
             data_list[diff_idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
 
-        return  anchor, same, diff, label_list[idx], label_list[diff_idx]
+        return anchor, same, diff, label_list[idx], label_list[diff_idx]
 
 
 class JointLoader(DsLoader):
@@ -128,3 +128,38 @@ class JointLoader(DsLoader):
             'gim_diff': gim_diff_label,
         }
         return {key: torch.FloatTensor(value) for key, value in data.items()}, label
+
+
+class SourceDataLoader(DsLoader):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __getitem__(self, idx):
+        anchor, same, diff, anchor_label, diff_label\
+            = self.get_triplet(idx, self.data, self.label, eval_mode=False, num_eval=1)
+
+        data = {
+            'anchor': anchor,
+            'same': same,
+            'diff': diff,
+        }
+
+        label = {
+            'anchor': anchor_label,
+            'diff': diff_label,
+        }
+        return {key: torch.FloatTensor(value) for key, value in data.items()}, label
+
+# a pair of augmented data
+
+
+class SimpleDataLoader(DsLoader):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __getitem__(self, idx):
+
+        return {
+            'anchor': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))),
+            'pos': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False)))
+        }, self.source_label[idx]

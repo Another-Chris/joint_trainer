@@ -1,7 +1,7 @@
 import torch
-from loader import SimpleDataLoader
+from loader import SourceDataLoader
 from tuneThreshold import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
-from trainer import SSLTrainer
+from trainer import JointTrainer
 from pathlib import Path
 from utils import Config
 
@@ -9,7 +9,7 @@ import torch.cuda
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_SSL_supCon"
+EXP_NAME = f"{MODEL_NAME}_infoMax"
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
@@ -31,7 +31,7 @@ def evaluate(trainer):
 
 
 if __name__ == "__main__":
-    ds = SimpleDataLoader(
+    joint_ds = SourceDataLoader(
         source_list=SOURCE_LIST,
         source_path=SOURCE_PATH,
         target_list=TARGET_LIST,
@@ -41,15 +41,15 @@ if __name__ == "__main__":
         rir_path=Config.RIR_PATH,
         max_frames=Config.MAX_FRAMES
     )
-    loader = torch.utils.data.DataLoader(
-        ds,
+    joint_loader = torch.utils.data.DataLoader(
+        joint_ds,
         batch_size=Config.BATCH_SIZE,
         shuffle=True,
         num_workers=Config.NUM_WORKERS,
         drop_last=True,
     )
       
-    trainer = SSLTrainer(
+    trainer = JointTrainer(
         exp_name = EXP_NAME,
         model_name=MODEL_NAME, 
         )
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     # core training script
     for it in range(1, Config.MAX_EPOCH + 1):
         print(f'epoch {it}')
-        loss = trainer.train_network(loader, epoch = it - 1)
+        loss = trainer.train_network(epoch = it - 1)
         
         loss_val_dict = loss
         desc = f"EPOCH {it}: "
@@ -65,7 +65,7 @@ if __name__ == "__main__":
             trainer.writer.add_scalar(f'epoch/{key}', val, it)
             desc += f" {key} = {val :.4f}"
 
-        torch.save(trainer.encoder.state_dict(), f'{MODEL_SAVE_PATH}')
+        trainer.saveParameters(f'{MODEL_SAVE_PATH}')
         print(desc)
 
         if it % Config.TEST_INTERVAL == 0:

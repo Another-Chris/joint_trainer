@@ -1,74 +1,65 @@
-from models import ECAPA_TDNN, GIM, LIM
-from .ModelTrainer import ModelTrainer
+from models import Head, ECAPA_TDNN_WITH_FBANK
 from tqdm import tqdm
-from loss import SubConLoss
+from loss import SupConLoss
+from utils import Config
 
 import torch
-import torch.nn.functional as F
 import sys
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.optim as optim
 sys.path.append('..')
 
 
-DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-
-
 class Workers(nn.Module):
-    def __init__(self, encoder) -> None:
+    def __init__(self, encoder, embed_size):
         super().__init__()
-
-        self.gim = GIM(encoder, embed_size=256, proj_size=128)
-        self.lim = LIM(encoder, embed_size=256, proj_size=128)
         
-    def train_subCon(self, segs, augs, bz, nviews):
-        outp_segs = self.worker_subcon(self.get_fbank(segs, aug=False))
-        outp_augs = self.worker_subcon(self.get_fbank(augs, aug=True))
-
-        outp = torch.cat([outp_segs, outp_augs], dim=0)
-        outp = torch.cat([d.unsqueeze(1)
-                         for d in torch.split(outp, [bz] * nviews, dim=0)], dim=1)
-        loss = self.loss_subcon(outp)
-        return loss
+        self.encoder = encoder
+        self.proj = Head(dim_in = embed_size, feat_dim = 128)
+        self.supConLoss = SupConLoss()
+        
+    def forward_supCon(self, anchor, pos):
+        bz = anchor.shape[0]
+        feat = F.normalize(self.proj(F.normalize(torch.cat([anchor, pos], dim = 0))))
+        f1, f2 = torch.split(feat, [bz,bz], dim = 1)
+        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(2)], dim = 1)
+        return self.supConLoss(feat)     
     
-    def train_GIM(self, data):
-        return self.gim.loss(self.gim(data)[0], self.gim(data)[1])
-    
-    def train_LIM(self, data):
-        return self.lim.loss(self.lim(data)[0], self.lim(data)[1])
-
-    def start_train(self, data):
-
+    def forward(self, batch):
+        data, _ = batch
+        feat = [self.encoder(d.to(Config.DEVICE)) for d in data]
+        
         return {
-            'LIM': self.train_LIM(data),
-            'GIM': self.train_GIM(data),
+            'SupCon': self.forward_supCon(feat['anchor'], feat['pos']),
         }
 
 
-class SSLTrainer(ModelTrainer):
-    def __init__(self):
-        super().__init__("ECAPA_TDNN")
+class SSLTrainer(torch.nn.Module):
+    def __init__(self, exp_name):
+        super().__init__(exp_name)
 
         # model
-        self.encoder = ECAPA_TDNN()
-        self.model = Workers(self.encoder)
-        self.model.to(DEVICE)
+        self.encoder = ECAPA_TDNN_WITH_FBANK()
+        self.model = Workers(self.encoder,embed_size=192)
+        self.model.to(Config.DEVICE)
 
         # optimizer
-        self.optim = optim.Adam(self.model.parameters(), lr=1e-3)
+        self.optim = optim.Adam(self.model.parameters(),
+                                lr=Config.LEARNING_RATE)
 
     def train_network(self, loader=None, epoch=None):
 
         self.model.train()
         loss_val_dict = {}
 
-        pbar = tqdm(enumerate(loader), total=len(loader))
+        steps = len(loader)
+        pbar = tqdm(enumerate(loader),total = len(loader))
 
-        for step, (data, _) in pbar:
+        for step, batch in pbar:
 
-            losses = self.model.start_train(data)
-
-            loss = torch.mean(torch.stack(list(losses.values())))
+            losses = self.model(batch)
+            loss = torch.sum(torch.stack(list(losses.values())))
             self.optim.zero_grad()
             loss.backward()
             self.optim.step()
@@ -78,16 +69,18 @@ class SSLTrainer(ModelTrainer):
                 val = val.detach().cpu()
                 loss_val_dict[key] = (loss_val_dict.get(key, 0) + val)
                 self.writer.add_scalar(
-                    f"step/{key}", val, epoch * len(loader) + step)
+                    f"step/{key}", val, epoch * steps + step)
                 desc += f" {key} = {val :.4f}"
 
             loss = loss.detach().cpu().item()
             self.writer.add_scalar(
-                f"step/loss", loss, epoch * len(loader) + step)
+                f"step/loss", loss, epoch * steps + step)
             loss_val_dict['loss'] = (
                 loss_val_dict.get('loss', 0) + loss)
 
             desc += f" {loss = :.3f}"
             pbar.set_description(desc)
 
+        loss_val_dict = {key: value/steps for key,
+                         value in loss_val_dict.items()}
         return loss_val_dict

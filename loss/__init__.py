@@ -1,2 +1,2 @@
 from .angleproto import LossFunction as AngleProtoLoss
-from .subConLoss import LossFunction as SubConLoss
+from .supConLoss import LossFunction as SupConLoss

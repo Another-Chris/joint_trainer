@@ -121,22 +121,15 @@ class FbankAug(nn.Module):
         x = self.mask_along_axis(x, dim=2)
         x = self.mask_along_axis(x, dim=1)
         return x
+    
 
 class ECAPA_TDNN(nn.Module):
 
-    def __init__(self, C):
+    def __init__(self, C, in_channel):
 
         super(ECAPA_TDNN, self).__init__()
 
-        self.torchfbank = torch.nn.Sequential(
-            PreEmphasis(),            
-            torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=512, win_length=400, hop_length=160, \
-                                                 f_min = 20, f_max = 7600, window_fn=torch.hamming_window, n_mels=80),
-            )
-
-        self.specaug = FbankAug() # Spec augmentation
-
-        self.conv1  = nn.Conv1d(80, C, kernel_size=5, stride=1, padding=2)
+        self.conv1  = nn.Conv1d(in_channel, C, kernel_size=5, stride=1, padding=2)
         self.relu   = nn.ReLU()
         self.bn1    = nn.BatchNorm1d(C)
         self.layer1 = Bottle2neck(C, C, kernel_size=3, dilation=2, scale=8)
@@ -157,14 +150,7 @@ class ECAPA_TDNN(nn.Module):
         self.bn6 = nn.BatchNorm1d(192)
 
 
-    def forward(self, x, aug = True):
-        with torch.no_grad():
-            x = self.torchfbank(x)+1e-6
-            x = x.log()   
-            x = x - torch.mean(x, dim=-1, keepdim=True)
-            if aug == True:
-                x = self.specaug(x)
-
+    def forward(self, x):
         x = self.conv1(x)
         x = self.relu(x)
         x = self.bn1(x)
@@ -193,5 +179,35 @@ class ECAPA_TDNN(nn.Module):
         return x
     
     
-def MainModel():
+class ECAPA_TDNN_WITH_FBANK(nn.Module):
+    def __init__(self, C) -> None:
+        
+        super().__init__()
+        
+        self.torchfbank = torch.nn.Sequential(
+            PreEmphasis(),            
+            torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=512, win_length=400, hop_length=160, \
+                                                 f_min = 20, f_max = 7600, window_fn=torch.hamming_window, n_mels=80),
+            )
+
+        self.specaug = FbankAug() # Spec augmentation
+        
+        self.ecapa_tdnn = ECAPA_TDNN(C, in_channel = 80)
+        
+        
+    def forward(self, x, aug = False):
+        with torch.no_grad():
+            x = self.torchfbank(x)+1e-6
+            x = x.log()   
+            x = x - torch.mean(x, dim=-1, keepdim=True)
+            if aug == True:
+                x = self.specaug(x)
+        return self.ecapa_tdnn(x)
+        
+    
+def get_ecapa_tdnn():
     return ECAPA_TDNN(1024)
+
+def get_ecapa_tdnn_with_fbank():
+    return ECAPA_TDNN_WITH_FBANK(1024)
+

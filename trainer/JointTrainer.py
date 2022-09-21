@@ -1,7 +1,7 @@
 from models import GIM, LIM, Head
 from .ModelTrainer import ModelTrainer
 from tqdm import tqdm
-from loss import SubConLoss
+from loss import SupConLoss
 from utils import Config
 
 import torch

@@ -9,12 +9,11 @@ import torch.cuda
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_SSL_supCon"
+EXP_NAME = f"{MODEL_NAME}_SSL_supCon_cnceleb"
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
-SOURCE_LIST = './data/voxceleb_train.txt'
-SOURCE_PATH = './data/voxceleb2/'
-TARGET_LIST = './data/cnceleb_train.txt'
-TARGET_PATH = './data/cnceleb/data'
+SOURCE_LIST = './data/cnceleb_train.txt'
+SOURCE_PATH = './data/cnceleb/data'
+PRE_TRAINED = './save/ECAPA_TDNN_SSL_supCon_cnceleb/encoder-10.model'
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 
@@ -22,8 +21,6 @@ if __name__ == "__main__":
     ds = SimpleDataLoader(
         source_list=SOURCE_LIST,
         source_path=SOURCE_PATH,
-        target_list=TARGET_LIST,
-        target_path=TARGET_PATH,
         augment=True,
         musan_path=Config.MUSAN_PATH,
         rir_path=Config.RIR_PATH,
@@ -39,6 +36,11 @@ if __name__ == "__main__":
       
     ds_gen = inf_train_gen(loader)
     trainer = SSLTrainer(exp_name = EXP_NAME)
+    
+    
+    if PRE_TRAINED is not None:
+        trainer.encoder.load_state_dict(torch.load(PRE_TRAINED))
+        print('pre-trained weight loaded!')
 
     # core training script
     for it in range(1, Config.MAX_EPOCH + 1):

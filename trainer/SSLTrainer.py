@@ -1,3 +1,4 @@
+from turtle import forward
 from models import Head, ECAPA_TDNN_WITH_FBANK
 from tqdm import tqdm
 from loss import SupConLoss
@@ -12,15 +13,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 sys.path.append('..')
 
-
-def get_grad(params):
-    grads = [0]
-    for p in params:
-        if p.grad is None: continue
-        grads.append(torch.mean(p.grad).item())
-    return max(grads)
-
-class Workers(nn.Module):
+class SupConWorker(nn.Module):
     def __init__(self, encoder, embed_size):
         super().__init__()
         
@@ -35,13 +28,76 @@ class Workers(nn.Module):
         feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
         return self.supConLoss(feat, label)     
     
+
+class LocalWorker(SupConWorker):
+    def __init__(self, encoder, embed_size):
+        super().__init__(encoder, embed_size)
+        
+        
     def forward(self, ds_gen):
         data, label = next(ds_gen)
         feat = {key: self.encoder(d.to(Config.DEVICE), aug = True) for key,d in data.items()}
         
         return {
-            'SupCon': self.forward_supCon(feat['anchor'], feat['pos']),
+            'LocalSupCon': self.forward_supCon(feat['anchor'], feat['pos']),
         }
+
+
+        
+class ChannelWorker(nn.Module):
+    def __init__(self, embed_size):
+        super().__init__(embed_size)
+        
+        self.head = Head(dim_in = embed_size, feat_dim=10)
+        
+    def forward(self, x, y):
+        x = self.head(x)
+        return F.cross_entropy(x, y)      
+
+
+class Workers(nn.Module):
+    def __init__(self, encoder, embed_size) -> None:
+        super().__init__()
+        
+        self.encoder = encoder 
+        self.proj_local = Head(dim_in = embed_size, feat_dim = 128)
+        self.proj_global = Head(dim_in = embed_size, feat_dim = 128)
+        self.supCon = SupConLoss()
+        
+    
+    def forward_local_supCon(self, anchor, pos, label = None):
+        bz = anchor.shape[0]
+        feat = F.normalize(self.proj_local(F.normalize(self.encoder(torch.cat([anchor, pos], dim = 0).to(Config.DEVICE), aug = True))))
+        f1, f2 = torch.split(feat, [bz,bz], dim = 0)
+        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
+        return self.supCon(feat, label)   
+    
+    
+    def forward_global_supCon(self, anchor, pos, label = None):
+        bz = anchor.shape[0]
+        
+        pos = torch.cat(torch.split(pos, Config.GIM_SEGS * [1], dim = 1), dim = 0)
+        anchor = torch.cat(torch.split(anchor, Config.GIM_SEGS * [1], dim = 1), dim = 0)
+        
+        feat = self.encoder(torch.cat([anchor, pos], dim = 0).to(Config.DEVICE), aug = True)
+        feat_anchor, feat_pos = torch.split(feat, 2 * [feat.shape[0] // 2])
+        feat_anchor = torch.mean(torch.cat([f.unsqueeze(1) for f in torch.split(feat_anchor, Config.GIM_SEGS * [bz], dim = 0)], dim = 1), dim = 1)
+        feat_pos = torch.mean(torch.cat([f.unsqueeze(1) for f in torch.split(feat_pos, Config.GIM_SEGS * [bz], dim = 0)], dim = 1), dim = 1)
+        
+        feat = F.normalize(self.proj_global(F.normalize(torch.cat([feat_anchor, feat_pos], dim = 0))))
+        f1, f2 = torch.split(feat, [bz,bz], dim = 0)
+        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
+        
+        return self.supCon(feat, label)
+        
+        
+    def forward(self, ds_gen):
+        data, _ = next(ds_gen)
+        return {
+            'localSupCon': self.forward_local_supCon(data['anchor'], data['pos'])
+        }
+
+
 
 
 class SSLTrainer(torch.nn.Module):
@@ -50,8 +106,8 @@ class SSLTrainer(torch.nn.Module):
         
         self.writer = SummaryWriter(log_dir=f"./logs/{exp_name}/{time.time()}")
         
-        self.encoder = ECAPA_TDNN_WITH_FBANK()
-        self.model = Workers(self.encoder,embed_size=192)
+        self.encoder = ECAPA_TDNN_WITH_FBANK(C = 512, embed_size = Config.EMBED_SIZE)
+        self.model = Workers(self.encoder,embed_size = Config.EMBED_SIZE)
         self.model.to(Config.DEVICE)
 
         # optimizer
@@ -64,7 +120,7 @@ class SSLTrainer(torch.nn.Module):
         self.model.train()
         loss_val_dict = {}
 
-        steps = 1024
+        steps = 512
         pbar = tqdm(range(steps))
 
         for step in pbar:
@@ -92,7 +148,7 @@ class SSLTrainer(torch.nn.Module):
 
             desc += f" {loss = :.3f}"
             pbar.set_description(desc)
-            
+                        
         loss_val_dict = {key: value/steps for key,
                          value in loss_val_dict.items()}
         return loss_val_dict

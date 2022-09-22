@@ -3,13 +3,13 @@ from loader import test_dataset_loader
 from joblib import Parallel, delayed
 from tuneThreshold import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
 from utils import Config
+from models import ECAPA_TDNN_WITH_FBANK
 
 import torch.nn.functional as F
 import random
 import torch
 import itertools
 import sys
-import importlib
 
 import numpy as np
 
@@ -18,7 +18,7 @@ sys.path.append("..")
 TEST_LIST = Config.TEST_LIST
 TEST_PATH = Config.TEST_PATH
 MODEL_NAME = 'ECAPA_TDNN'
-PRE_TRAINED = './save/ECAPA_TDNN_infoMax/model-1.model'
+PRE_TRAINED = './save/ECAPA_TDNN_SSL_supCon_cnceleb/encoder-10.model'
 NUM_WORKERS = 1
 
 
@@ -122,8 +122,7 @@ def evaluate(encoder):
 
 
 if __name__ == '__main__':
-    encoder = importlib.import_module(
-            'models').__getattribute__(MODEL_NAME)()
+    encoder = ECAPA_TDNN_WITH_FBANK(C = 512, embed_size=Config.EMBED_SIZE)
     
     if PRE_TRAINED is not None:
         encoder.load_state_dict(torch.load(PRE_TRAINED))

@@ -4,39 +4,17 @@ import numpy as np
 import soundfile as sf 
 
 
-def load_wav(filename, max_frames, evalmode=True, num_eval=10):
-    max_audio = max_frames * 160 + 240
-
-    audio, _ = sf.read(filename)
-    audiosize = audio.shape[0]
-
-    # pad short audio frames
-    if audiosize <= max_audio:
-        shortage = max_audio - audiosize + 1
-        audio = np.pad(audio, (0, shortage), 'wrap')
-        audiosize = audio.shape[0]
-
-    # random seg; if short, startframe = 0
-    # num_eval: take segments in a linearly increasing fashion
-    if evalmode:
-        startframe = np.linspace(0, audiosize - max_audio, num=num_eval)
-    else:
-        startframe = np.array(
-            [np.int64(random.random() * (audiosize - max_audio))])
-
-    # actually take the segment
-    feats = []
-    if evalmode and max_frames == 0:
-        feats.append(audio)
-    else:
-        for asf in startframe:
-            feats.append(audio[int(asf):int(asf) + max_audio])
-
-    feat = np.stack(feats, axis=0).astype(float)
-
-    return feat
+import scipy.signal as ss 
 
 
+d = np.random.random(size = (10, 100))
+rir = np.random.random(size = (1, 100))
 
-seg = load_wav("./audio.wav", max_frames=200, evalmode=True, num_eval = 5)
-print(seg.shape)
+c1 = ss.convolve(d, rir)
+
+c2 = []
+for dd in d:
+    c2.append(ss.convolve(dd[None, ...], rir))
+c2 = np.concatenate(c2)
+
+print((c1 == c2).all())

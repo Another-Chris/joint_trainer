@@ -58,16 +58,24 @@ class DsLoader():
         self.max_frames = max_frames
         self.augment = augment
 
-    def augment_audio(self, audio):
-        if np.random.random() < 0.5:
-            audio = self.augment_wav.reverberate(audio)
-        if np.random.random() < 0.2:
-            audio = self.augment_wav.additive_noise('music', audio)
-        if np.random.random() < 0.2:
-            audio = self.augment_wav.additive_noise('speech', audio)
-        if np.random.random() < 0.2:
-            audio = self.augment_wav.additive_noise('noise', audio)
+    def augment_audio(self, audio, return_type=False):
 
+        augtype = [0]
+        if np.random.random() < 0.3:
+            audio = self.augment_wav.reverberate(audio)
+            augtype.append(1)
+        if np.random.random() < 0.3:
+            audio = self.augment_wav.additive_noise('music', audio)
+            augtype.append(2)
+        if np.random.random() < 0.3:
+            audio = self.augment_wav.additive_noise('speech', audio)
+            augtype.append(3)
+        if np.random.random() < 0.3:
+            audio = self.augment_wav.additive_noise('noise', audio)
+            augtype.append(4)
+
+        if return_type:
+            return audio, sum(augtype)
         return audio
 
     def __len__(self):
@@ -150,13 +158,50 @@ class SourceDataLoader(DsLoader):
         return {key: torch.FloatTensor(value) for key, value in data.items()}, label
 
 # a pair of augmented data
+
+
 class SimpleDataLoader(DsLoader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def __getitem__(self, idx):
-        
+
         return {
             'anchor': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))),
             'pos': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False)))
         }, self.source_label[idx]
+
+
+class AverageDataLoader(DsLoader):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __getitem__(self, idx):
+
+        return {
+            'anchor': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))),
+            'pos': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=True, num_eval=5)))
+        }, self.source_label[idx]
+
+
+class AugTypeDataLoader(DsLoader):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def __getitem__(self, idx):
+
+        anchor, anchor_aug = self.augment_audio(
+            load_wav(self.source_data[idx], self.max_frames, evalmode=False), return_type=True)
+        pos, pos_aug = self.augment_audio(
+            load_wav(self.source_data[idx], self.max_frames, evalmode=False), return_type=True)
+
+        anchor = torch.FloatTensor(anchor)
+        pos = torch.FloatTensor(pos)
+
+        return {
+            'anchor': anchor,
+            'pos': pos
+        }, self.source_label[idx], {
+            'anchor': anchor_aug,
+            'pos': pos_aug
+        }

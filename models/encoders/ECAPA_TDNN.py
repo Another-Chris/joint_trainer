@@ -125,7 +125,7 @@ class FbankAug(nn.Module):
 
 class ECAPA_TDNN(nn.Module):
 
-    def __init__(self, C, in_channel):
+    def __init__(self, C, in_channel, embed_size):
 
         super(ECAPA_TDNN, self).__init__()
 
@@ -146,8 +146,8 @@ class ECAPA_TDNN(nn.Module):
             nn.Softmax(dim=2),
             )
         self.bn5 = nn.BatchNorm1d(3072)
-        self.fc6 = nn.Linear(3072, 192)
-        self.bn6 = nn.BatchNorm1d(192)
+        self.fc6 = nn.Linear(3072, embed_size)
+        self.bn6 = nn.BatchNorm1d(embed_size)
 
 
     def forward(self, x):
@@ -180,7 +180,7 @@ class ECAPA_TDNN(nn.Module):
     
     
 class ECAPA_TDNN_WITH_FBANK(nn.Module):
-    def __init__(self, C) -> None:
+    def __init__(self, C, embed_size) -> None:
         
         super().__init__()
         
@@ -192,7 +192,7 @@ class ECAPA_TDNN_WITH_FBANK(nn.Module):
 
         self.specaug = FbankAug() # Spec augmentation
         
-        self.ecapa_tdnn = ECAPA_TDNN(C, in_channel = 80)
+        self.ecapa_tdnn = ECAPA_TDNN(C, in_channel = 80, embed_size = embed_size)
         
         
     def forward(self, x, aug = False):
@@ -205,9 +205,9 @@ class ECAPA_TDNN_WITH_FBANK(nn.Module):
         return self.ecapa_tdnn(x)
         
     
-def get_ecapa_tdnn():
-    return ECAPA_TDNN(1024)
+def get_ecapa_tdnn(C, embed_size):
+    return ECAPA_TDNN(C, embed_size)
 
-def get_ecapa_tdnn_with_fbank():
-    return ECAPA_TDNN_WITH_FBANK(1024)
+def get_ecapa_tdnn_with_fbank(C, embed_size):
+    return ECAPA_TDNN_WITH_FBANK(C, embed_size)
 

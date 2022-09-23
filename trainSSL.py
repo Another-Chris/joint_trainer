@@ -9,11 +9,11 @@ import torch.cuda
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_SSL_supCon_cnceleb"
+EXP_NAME = f"{MODEL_NAME}_SSL_supCon_voxceleb"
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
-SOURCE_LIST = './data/cnceleb_train.txt'
-SOURCE_PATH = './data/cnceleb/data'
-PRE_TRAINED = './save/ECAPA_TDNN_SSL_supCon_cnceleb/encoder-60.model'
+SOURCE_LIST = './data/voxceleb_train.txt'
+SOURCE_PATH = './data/voxceleb2/'
+PRE_TRAINED = None
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 
@@ -36,7 +36,6 @@ if __name__ == "__main__":
       
     ds_gen = inf_train_gen(loader)
     trainer = SSLTrainer(exp_name = EXP_NAME)
-    
     
     if PRE_TRAINED is not None:
         trainer.encoder.load_state_dict(torch.load(PRE_TRAINED))

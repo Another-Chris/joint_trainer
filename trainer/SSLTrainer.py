@@ -148,7 +148,7 @@ class SSLTrainer(torch.nn.Module):
 
             desc += f" {loss = :.3f}"
             pbar.set_description(desc)
-                        
+                                    
         loss_val_dict = {key: value/steps for key,
                          value in loss_val_dict.items()}
         return loss_val_dict

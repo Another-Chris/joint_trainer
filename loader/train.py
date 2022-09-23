@@ -1,4 +1,3 @@
-from audioop import maxpp
 from .utils import load_wav
 from .augment import AugmentWAV
 from utils import Config
@@ -61,16 +60,18 @@ class DsLoader():
     def augment_audio(self, audio, return_type=False):
 
         augtype = [0]
-        if np.random.random() < 0.3:
+        if np.random.random() < 0.8:
             audio = self.augment_wav.reverberate(audio)
             augtype.append(1)
-        if np.random.random() < 0.3:
+            
+        randi = np.random.randint(0,3)
+        if randi == 0:
             audio = self.augment_wav.additive_noise('music', audio)
             augtype.append(2)
-        if np.random.random() < 0.3:
+        if randi == 1:
             audio = self.augment_wav.additive_noise('speech', audio)
             augtype.append(3)
-        if np.random.random() < 0.3:
+        if randi == 2:
             audio = self.augment_wav.additive_noise('noise', audio)
             augtype.append(4)
 

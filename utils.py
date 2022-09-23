@@ -18,11 +18,11 @@ class Config():
     GIM_SEGS = 5
     MAX_EPOCH = 200
     TEST_INTERVAL = 10
-    NUM_WORKERS = 5
+    NUM_WORKERS = 4
     BATCH_SIZE = 128
     NUM_CLASSES = 5994
     MAX_FRAMES = 200
-    LEARNING_RATE = 1e-3
+    LEARNING_RATE = 1e-4
     EMBED_SIZE = 256
     MUSAN_PATH = "./data/musan_split"
     RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"    

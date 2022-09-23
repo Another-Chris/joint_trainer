@@ -13,7 +13,7 @@ EXP_NAME = f"{MODEL_NAME}_SSL_supCon_cnceleb"
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/cnceleb_train.txt'
 SOURCE_PATH = './data/cnceleb/data'
-PRE_TRAINED = './save/ECAPA_TDNN_SSL_supCon_cnceleb/encoder-10.model'
+PRE_TRAINED = './save/ECAPA_TDNN_SSL_supCon_cnceleb/encoder-60.model'
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 

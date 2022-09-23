@@ -18,7 +18,7 @@ sys.path.append("..")
 TEST_LIST = Config.TEST_LIST
 TEST_PATH = Config.TEST_PATH
 MODEL_NAME = 'ECAPA_TDNN'
-PRE_TRAINED = './save/ECAPA_TDNN_SSL_supCon_cnceleb/encoder-10.model'
+PRE_TRAINED = './save/ECAPA_TDNN_SSL_supCon_cnceleb/encoder-20.model'
 NUM_WORKERS = 1
 
 

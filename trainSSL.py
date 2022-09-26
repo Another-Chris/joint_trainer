@@ -9,7 +9,8 @@ import torch.cuda
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_SSL_supCon_voxceleb"
+EXP_NAME = f"{MODEL_NAME}_SSL_LIM_SupCon_voxceleb"
+# EXP_NAME = f"test"
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'

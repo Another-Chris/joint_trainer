@@ -15,11 +15,11 @@ import librosa.display
 
 
 class Config():
-    GIM_SEGS = 5
+    GIM_SEGS = 3
     MAX_EPOCH = 200
     TEST_INTERVAL = 10
     NUM_WORKERS = 4
-    BATCH_SIZE = 128
+    BATCH_SIZE = 64
     NUM_CLASSES = 5994
     MAX_FRAMES = 200
     LEARNING_RATE = 1e-3

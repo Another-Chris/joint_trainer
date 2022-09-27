@@ -1,7 +1,7 @@
 from loader import JointLoader
-from trainer import SSLTrainer
+from trainer import JointTrainer
 from pathlib import Path
-from utils import Config,inf_train_gen
+from utils import Config, inf_train_gen
 from eval import evaluate
 
 import torch
@@ -9,14 +9,14 @@ import torch.cuda
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
+EXP_NAME = f"{MODEL_NAME}_Joint_bothSSL_round2"
 # EXP_NAME = f"test"
-EXP_NAME = f"{MODEL_NAME}_Joint_bothSSL"
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
 TARGET_PATH = './data/cnceleb/data/'
 TARGET_LIST = './data/cnceleb_train.txt'
-PRE_TRAINED = None
+PRE_TRAINED = './save/ECAPA_TDNN_Joint_bothSSL/encoder-30.model'
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 
@@ -24,8 +24,8 @@ if __name__ == "__main__":
     ds = JointLoader(
         source_list=SOURCE_LIST,
         source_path=SOURCE_PATH,
-        target_list = TARGET_LIST,
-        target_path = TARGET_PATH,
+        target_list=TARGET_LIST,
+        target_path=TARGET_PATH,
         augment=True,
         musan_path=Config.MUSAN_PATH,
         rir_path=Config.RIR_PATH,
@@ -38,10 +38,10 @@ if __name__ == "__main__":
         num_workers=Config.NUM_WORKERS,
         drop_last=True,
     )
-      
+
     ds_gen = inf_train_gen(loader)
-    trainer = SSLTrainer(exp_name = EXP_NAME)
-    
+    trainer = JointTrainer(exp_name=EXP_NAME)
+
     if PRE_TRAINED is not None:
         trainer.encoder.load_state_dict(torch.load(PRE_TRAINED))
         print('pre-trained weight loaded!')
@@ -49,8 +49,8 @@ if __name__ == "__main__":
     # core training script
     for it in range(1, Config.MAX_EPOCH + 1):
         print(f'epoch {it}')
-        loss = trainer.train_network(ds_gen, epoch = it - 1)
-        
+        loss = trainer.train_network(ds_gen, epoch=it - 1)
+
         loss_val_dict = loss
         desc = f"EPOCH {it}: "
         for key, val in loss_val_dict.items():
@@ -59,16 +59,16 @@ if __name__ == "__main__":
 
         lr = trainer.scheduler.get_last_lr()[0]
         desc += f' {lr = :8f}'
-        
+
         print(desc)
-        
-        torch.save(trainer.encoder.state_dict(), f'{MODEL_SAVE_PATH}/encoder-{it}.model')
+
+        torch.save(trainer.encoder.state_dict(),
+                   f'{MODEL_SAVE_PATH}/encoder-{it}.model')
         if lr > 1e-7:
             trainer.scheduler.step()
-        
+
         if it % Config.TEST_INTERVAL == 0:
             eer, mindcf = evaluate(trainer.encoder)
             print(f'\n Epoch {it}, VEER {eer:.4f}, MinDCF: {mindcf:.5f}')
             trainer.writer.add_scalar('Eval/EER', eer, it)
             trainer.writer.add_scalar('Eval/MinDCF', mindcf, it)
-

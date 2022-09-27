@@ -99,11 +99,14 @@ class DsLoader():
         }
 
     
-    def get_tuple(self, idx, data_list, label_list, eval_mode, num_eval):
-        segs = load_wav(data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval)
-        anchor = self.augment_audio(segs)
-        same = self.augment_audio(segs)
-        return anchor, same, label_list[idx]
+    def get_tuple(self, idx, data_list, label_list, eval_mode, num_eval = Config.GIM_SEGS):
+        anchor = self.augment_audio(load_wav(data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
+        pos = self.augment_audio(load_wav(data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
+        
+        anchor = torch.FloatTensor(anchor)
+        pos = torch.FloatTensor(pos)
+        
+        return {'anchor': anchor, 'pos': pos}, label_list[idx]
 
 
 class JointLoader(DsLoader):
@@ -112,12 +115,15 @@ class JointLoader(DsLoader):
         
     def __getitem__(self, idx):
        
-        source_data, source_label = self.get_triplet(idx, self.source_data, self.source_label, eval_mode=False)
-        target_data, target_label = self.get_triplet(idx, self.target_data, self.target_label, eval_mode=False)
+        source_data, source_label = self.get_tuple(idx, self.source_data, self.source_label, eval_mode=False)
+        
+        tidx = np.random.randint(0, len(self.target_data))
+        target_data, target_label = self.get_tuple(tidx, self.target_data, self.target_label, eval_mode=False)
 
         return {
             'source_data': source_data,
             'target_data': target_data,
+        }, {
             'source_label': source_label,
             'target_label': target_label,
         }

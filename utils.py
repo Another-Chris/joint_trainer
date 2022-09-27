@@ -22,7 +22,7 @@ class Config():
     BATCH_SIZE = 64
     NUM_CLASSES = 5994
     MAX_FRAMES = 200
-    LEARNING_RATE = 1e-3
+    LEARNING_RATE = 8e-4
     EMBED_SIZE = 256
     MUSAN_PATH = "./data/musan_split"
     RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"    

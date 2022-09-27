@@ -62,7 +62,7 @@ class Workers(nn.Module):
     def forward(self, ds_gen):
         data, _ = next(ds_gen)
         return {
-            'localSupCon': self.forward_local_supCon(data['anchor'], data['pos']),
+            # 'localSupCon': self.forward_local_supCon(data['anchor'], data['pos']),
             'LIM': self.forward_lim(data['anchor'], data['pos'], data['diff'])
         }
 

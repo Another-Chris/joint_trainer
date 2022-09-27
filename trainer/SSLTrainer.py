@@ -14,51 +14,52 @@ import torch.optim as optim
 sys.path.append('..')
 
 
-
 class Workers(nn.Module):
     def __init__(self, encoder, embed_size) -> None:
         super().__init__()
-        
-        self.encoder = encoder 
-        self.proj_local = Head(dim_in = embed_size, feat_dim = 128)
-        self.discriminator = Head(dim_in = 2 * embed_size, feat_dim = 1)
-        self.supCon = SupConLoss()
-        
-    def forward_lim(self, anchor, pos, diff):
-        bz = anchor.shape[0]
-        feat = self.encoder(torch.cat([anchor, pos, diff], dim = 0).to(Config.DEVICE))
-        feat_anchor, feat_pos, feat_diff = torch.split(feat, 3 * [bz])
-        
-        X1 = torch.cat([feat_anchor, feat_pos], dim = 1)
-        X2 = torch.cat([feat_anchor, feat_diff], dim = 1)
-        X = self.discriminator(torch.cat([X1,X2], dim = 0))
-        
-        slen = X.shape[1]
-        y = torch.cat([torch.ones(size = (X1.shape[0], slen)), torch.zeros(size = (X2.shape[0], slen))]).to(Config.DEVICE)
 
-        return F.binary_cross_entropy_with_logits(X, y)
-        
-    
-    def forward_local_supCon(self, anchor, pos, label = None):
+        self.encoder = encoder
+        self.estimator_s = Head(dim_in=embed_size, feat_dim=1)
+        self.estimator_t = Head(dim_in=embed_size, feat_dim=1)
+        self.projector = Head(dim_in=embed_size, feat_dim=128)
+
+        # loss
+        self.supCon = SupConLoss()
+
+        # optimizer
+        self.ssl_optim = optim.Adam(self.encoder.parameters() + self.projector.parameters(),
+                                    lr=Config.LEARNING_RATE)
+        self.estimator_optim = optim.Adam(self.estimator_s.parameters() + self.estimator_t.parameters(),
+                                          lr=Config.LEARNING_RATE)
+
+        self.ssl_scheduler = optim.lr_scheduler.StepLR(
+            self.optim, step_size=5, gamma=0.95)
+        self.estimator_scheduler = optim.lr_scheduler.StepLR(
+            self.optim, step_size=5, gamma=0.95)
+
+
+    def forward_local_supCon(self, anchor, pos, label=None):
         bz = anchor.shape[0]
-        feat = F.normalize(self.proj_local(F.normalize(self.encoder(torch.cat([anchor, pos], dim = 0).to(Config.DEVICE), aug = True))))
-        f1, f2 = torch.split(feat, [bz,bz], dim = 0)
-        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
-        return self.supCon(feat, label)   
-    
-    
-    def forward_global_supCon(self, anchor, pos, label = None):
-        bz = anchor.shape[0]
-        pos = torch.cat(torch.split(pos, Config.GIM_SEGS * [1], dim = 1), dim = 0)
-        feat = self.encoder(torch.cat([anchor, pos], dim = 0).to(Config.DEVICE), aug = True)
-        feat_anchor, feat_pos = torch.split(feat, [bz, pos.shape[0]], dim = 0)
-        feat_pos = torch.mean(torch.cat([f.unsqueeze(1) for f in torch.split(feat_pos, Config.GIM_SEGS * [bz], dim = 0)], dim = 1), dim = 1)
-        feat = F.normalize(self.proj_global(F.normalize(torch.cat([feat_anchor, feat_pos], dim = 0))))
-        f1, f2 = torch.split(feat, [bz,bz], dim = 0)
-        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
+        feat = F.normalize(self.proj_local(F.normalize(self.encoder(
+            torch.cat([anchor, pos], dim=0).to(Config.DEVICE), aug=True))))
+        f1, f2 = torch.split(feat, [bz, bz], dim=0)
+        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
         return self.supCon(feat, label)
-    
-    
+
+    def forward_global_supCon(self, anchor, pos, label=None):
+        bz = anchor.shape[0]
+        pos = torch.cat(torch.split(pos, Config.GIM_SEGS * [1], dim=1), dim=0)
+        feat = self.encoder(
+            torch.cat([anchor, pos], dim=0).to(Config.DEVICE), aug=True)
+        feat_anchor, feat_pos = torch.split(feat, [bz, pos.shape[0]], dim=0)
+        feat_pos = torch.mean(torch.cat([f.unsqueeze(1) for f in torch.split(
+            feat_pos, Config.GIM_SEGS * [bz], dim=0)], dim=1), dim=1)
+        feat = F.normalize(self.proj_global(F.normalize(
+            torch.cat([feat_anchor, feat_pos], dim=0))))
+        f1, f2 = torch.split(feat, [bz, bz], dim=0)
+        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+        return self.supCon(feat, label)
+
     def forward(self, ds_gen):
         data, _ = next(ds_gen)
         return {
@@ -70,17 +71,13 @@ class Workers(nn.Module):
 class SSLTrainer(torch.nn.Module):
     def __init__(self, exp_name):
         super().__init__()
-        
-        self.writer = SummaryWriter(log_dir=f"./logs/{exp_name}/{dt.now().strftime('%Y-%m-%d %H.%M.%S')}")
-        
-        self.encoder = ECAPA_TDNN_WITH_FBANK(C = 512, embed_size = Config.EMBED_SIZE)
-        self.model = Workers(self.encoder,embed_size = Config.EMBED_SIZE)
-        self.model.to(Config.DEVICE)
 
-        # optimizer
-        self.optim = optim.Adam(self.model.parameters(),
-                                lr=Config.LEARNING_RATE)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optim, step_size = 5, gamma = 0.95)
+        self.writer = SummaryWriter(
+            log_dir=f"./logs/{exp_name}/{dt.now().strftime('%Y-%m-%d %H.%M.%S')}")
+
+        self.encoder = ECAPA_TDNN_WITH_FBANK(
+            C=512, embed_size=Config.EMBED_SIZE)
+        self.model = Workers(self.encoder, Config.EMBED_SIZE)
 
     def train_network(self, ds_gen, epoch):
 
@@ -94,7 +91,7 @@ class SSLTrainer(torch.nn.Module):
 
             losses = self.model(ds_gen)
             loss = torch.sum(torch.stack(list(losses.values())))
-                    
+
             self.optim.zero_grad()
             loss.backward()
             self.optim.step()
@@ -115,7 +112,7 @@ class SSLTrainer(torch.nn.Module):
 
             desc += f" {loss = :.3f}"
             pbar.set_description(desc)
-                                    
+
         loss_val_dict = {key: value/steps for key,
                          value in loss_val_dict.items()}
         return loss_val_dict

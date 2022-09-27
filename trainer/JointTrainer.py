@@ -19,11 +19,30 @@ class Workers(nn.Module):
         super().__init__()
 
         self.encoder = encoder
-        self.proj_local = Head(dim_in=embed_size, feat_dim=128)
-        self.discriminator = Head(dim_in=2 * embed_size, feat_dim=1)
-        self.supCon = SupConLoss()
+        self.estimator_s = Head(dim_in=embed_size, feat_dim=1)
+        self.estimator_t = Head(dim_in=embed_size, feat_dim=1)
+        self.projector = Head(dim_in=embed_size, feat_dim=128)
+        self.discriminator = Head(dim_in = embed_size, feat_dim = 128)
 
-    def forward_lan(self, source_data, target_data):
+        # loss
+        self.supCon = SupConLoss()
+        self.kl = nn.KLDivLoss(reduction = 'batchmean')
+        
+    def forward_kl(self, source_data, target_data):
+        bz = source_data['anchor'].shape[0]
+
+        data = torch.cat(
+            [d for _, d in source_data.items() + target_data.items()], dim=0)
+        embed = self.encoder(data)
+        s_anchor, s_pos, t_anchor, t_pos = torch.split(embed, 4 * [bz])
+        
+        s_dist = F.logsigmoid(self.estimator_s(torch.cat([s_anchor, s_pos], dim = 0)))
+        t_dist = F.logsigmoid(self.estimator_t(torch.cat([t_anchor, t_pos], dim = 0)))
+        
+        return self.kl(s_dist, t_dist) + self.kl(t_dist, s_dist)
+        
+
+    def forward_MI(self, source_data, target_data):
         bz = source_data['anchor'].shape[0]
 
         data = torch.cat(

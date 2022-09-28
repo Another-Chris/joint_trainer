@@ -1,4 +1,3 @@
-from turtle import forward
 from models import Head, ECAPA_TDNN_WITH_FBANK
 from tqdm import tqdm
 from loss import SupConLoss
@@ -128,7 +127,7 @@ class JointTrainer(torch.nn.Module):
             loss_val_dict['loss'] = (
                 loss_val_dict.get('loss', 0) + loss)
 
-            desc += f" {loss = :.3f}"
+            desc += f" loss = {loss:.3f}"
             pbar.set_description(desc)
 
         loss_val_dict = {key: value/steps for key,

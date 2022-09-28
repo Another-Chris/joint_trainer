@@ -20,7 +20,7 @@ class Workers(nn.Module):
 
         self.encoder = encoder
         self.supCon = SupConLoss()
-        self.discriminator = Head(dim_in = 2 * embed_size, feat_dim = 1)
+        # self.discriminator = Head(dim_in = 2 * embed_size, feat_dim = 1)
         
     def forward_supcon(self, feat,bz, label=None):
         feat = F.normalize(feat)
@@ -28,16 +28,16 @@ class Workers(nn.Module):
         feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
         return self.supCon(feat, label)
 
-    def forward_lim(self, feat, bz):
-        anchor, pos, diff = torch.split(feat, 3*[bz])
+    # def forward_lim(self, feat, bz):
+    #     anchor, pos, diff = torch.split(feat, 3*[bz])
         
-        x1 = torch.cat([anchor, pos], dim = 1)
-        x2 = torch.cat([anchor, diff], dim = 1)
-        X = self.discriminator(torch.cat([x1, x2], dim = 0))
+    #     x1 = torch.cat([anchor, pos], dim = 1)
+    #     x2 = torch.cat([anchor, diff], dim = 1)
+    #     X = self.discriminator(torch.cat([x1, x2], dim = 0))
         
-        slen = X.shape[1]
-        label = torch.cat([torch.ones(x1.shape[0], slen), torch.zeros(x2.shape[0], slen)])
-        return F.binary_cross_entropy_with_logits(X, label)
+    #     slen = X.shape[1]
+    #     label = torch.cat([torch.ones(x1.shape[0], slen), torch.zeros(x2.shape[0], slen)])
+    #     return F.binary_cross_entropy_with_logits(X, label)
         
 
     def forward(self, ds_gen):
@@ -59,9 +59,12 @@ class SSLTrainer(torch.nn.Module):
         self.writer = SummaryWriter(
             log_dir=f"./logs/{exp_name}/{dt.now().strftime('%Y-%m-%d %H.%M.%S')}")
 
-        self.encoder = ECAPA_TDNN_WITH_FBANK(
-            C=512, embed_size=Config.EMBED_SIZE)
+        self.encoder = ECAPA_TDNN_WITH_FBANK(C=Config.C, embed_size=Config.EMBED_SIZE)
         self.model = Workers(self.encoder, Config.EMBED_SIZE)
+        self.model.to(Config.DEVICE)
+        
+        self.optim = optim.Adam(self.model.parameters(), lr = Config.LEARNING_RATE)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optim, step_size=5, gamma=0.95)
 
     def train_network(self, ds_gen, epoch):
 

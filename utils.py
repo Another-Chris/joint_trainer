@@ -23,13 +23,14 @@ class Config():
     NUM_CLASSES = 5994
     MAX_FRAMES = 200
     LEARNING_RATE = 2e-4
-    EMBED_SIZE = 256
+    EMBED_SIZE = 192
+    C = 1024
     MUSAN_PATH = "./data/musan_split"
     RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"    
-    TEST_PATH = "./data/cnceleb/eval/"
-    TEST_LIST = "./data/cnceleb_test.txt"
-    # TEST_PATH = "./data/voxceleb1_test/"
-    # TEST_LIST = "./data/voxceleb_test.txt"
+    # TEST_PATH = "./data/cnceleb/eval/"
+    # TEST_LIST = "./data/cnceleb_test.txt"
+    TEST_PATH = "./data/voxceleb1_test/"
+    TEST_LIST = "./data/voxceleb_test.txt"
     DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 def plot_batch(batch):

@@ -19,35 +19,18 @@ class Workers(nn.Module):
         super().__init__()
 
         self.encoder = encoder
-        self.estimator_s = Head(dim_in=embed_size, feat_dim=1)
-        self.estimator_t = Head(dim_in=embed_size, feat_dim=1)
         self.projector = Head(dim_in=embed_size, feat_dim=128)
-        self.discriminator = Head(dim_in = embed_size, feat_dim = 128)
+        self.discriminator = Head(dim_in = 2 * embed_size, feat_dim = 1)
 
         # loss
         self.supCon = SupConLoss()
-        self.kl = nn.KLDivLoss(reduction = 'batchmean')
         
-    def forward_kl(self, source_data, target_data):
-        bz = source_data['anchor'].shape[0]
-
-        data = torch.cat(
-            [d for _, d in source_data.items() + target_data.items()], dim=0)
-        embed = self.encoder(data)
-        s_anchor, s_pos, t_anchor, t_pos = torch.split(embed, 4 * [bz])
-        
-        s_dist = F.logsigmoid(self.estimator_s(torch.cat([s_anchor, s_pos], dim = 0)))
-        t_dist = F.logsigmoid(self.estimator_t(torch.cat([t_anchor, t_pos], dim = 0)))
-        
-        return self.kl(s_dist, t_dist) + self.kl(t_dist, s_dist)
-        
-
     def forward_MI(self, source_data, target_data):
         bz = source_data['anchor'].shape[0]
 
         data = torch.cat(
-            [d for _, d in source_data.items() + target_data.items()], dim=0)
-        embed = self.encoder(data)
+            [d for _, d in list(source_data.items()) + list(target_data.items())], dim=0)
+        embed = self.encoder(data.to(Config.DEVICE))
         s_anchor, s_pos, t_anchor, t_pos = torch.split(embed, 4 * [bz])
 
         same_lan = torch.cat([
@@ -56,10 +39,10 @@ class Workers(nn.Module):
         ], dim=0)
 
         diff_lan = torch.cat([
-            torch.cat([s_anchor, t_anchor], dim=1),
             torch.cat([s_anchor, t_pos], dim=1),
-            torch.cat([s_pos, t_pos], dim=1),
-            torch.cat([s_pos, t_pos], dim=1),
+            torch.cat([s_pos, t_anchor], dim=1),
+            # torch.cat([s_anchor, t_anchor], dim=1),
+            # torch.cat([s_pos, t_pos], dim=1),
         ], dim=0)
         
         target = self.discriminator(torch.cat([same_lan, diff_lan], dim = 0))
@@ -69,44 +52,31 @@ class Workers(nn.Module):
             torch.zeros(size = (diff_lan.shape[0], target.shape[1])),
         ])
         
-        return F.binary_cross_entropy_with_logits(target, label)
+        return F.binary_cross_entropy_with_logits(target, label.to(Config.DEVICE))
 
-    def forward_lim(self, anchor, pos, diff):
-        bz = anchor.shape[0]
-        feat = self.encoder(
-            torch.cat([anchor, pos, diff], dim=0).to(Config.DEVICE))
-        feat_anchor, feat_pos, feat_diff = torch.split(feat, 3 * [bz])
+    def forward_supcon(self, source_data, target_data, label=None):
+        
+        bz = source_data['anchor'].shape[0]
 
-        X1 = torch.cat([feat_anchor, feat_pos], dim=1)
-        X2 = torch.cat([feat_anchor, feat_diff], dim=1)
-        X = self.discriminator(torch.cat([X1, X2], dim=0))
-
-        slen = X.shape[1]
-        y = torch.cat([torch.ones(size=(X1.shape[0], slen)), torch.zeros(
-            size=(X2.shape[0], slen))]).to(Config.DEVICE)
-
-        return F.binary_cross_entropy_with_logits(X, y)
-
-    def forward_local_supCon(self, anchor, pos, label=None):
-        bz = anchor.shape[0]
-        feat = F.normalize(self.proj_local(F.normalize(self.encoder(
-            torch.cat([anchor, pos], dim=0).to(Config.DEVICE), aug=True))))
-        f1, f2 = torch.split(feat, [bz, bz], dim=0)
-        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-        return self.supCon(feat, label)
+        data = torch.cat(
+            [d for _, d in list(source_data.items()) + list(target_data.items())], dim=0)
+        embed = F.normalize(self.encoder(data.to(Config.DEVICE)))
+        s_anchor, s_pos, t_anchor, t_pos = torch.split(embed, 4 * [bz])
+        
+        feat_source = torch.cat([s_anchor.unsqueeze(1), s_pos.unsqueeze(1)], dim = 1)
+        feat_target = torch.cat([t_anchor.unsqueeze(1), t_pos.unsqueeze(1)], dim = 1)
+        
+        return (self.supCon(feat_source) + self.supCon(feat_target)) / 2
 
     def forward(self, ds_gen):
         data, label = next(ds_gen)
 
         source_data = data['source_data']
         target_data = data['target_data']
-
-        anchor = torch.cat(
-            [source_data['anchor'], target_data['anchor']], dim=0)
-        pos = torch.cat([source_data['pos'], target_data['pos']], dim=0)
-
+        
         return {
-            'supCon': self.forward_local_supCon(anchor, pos),
+            'supcon': self.forward_supcon(source_data, target_data),
+            # 'MI': self.forward_MI(source_data, target_data)
         }
 
 

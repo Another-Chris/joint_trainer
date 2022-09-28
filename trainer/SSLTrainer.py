@@ -19,52 +19,36 @@ class Workers(nn.Module):
         super().__init__()
 
         self.encoder = encoder
-        self.estimator_s = Head(dim_in=embed_size, feat_dim=1)
-        self.estimator_t = Head(dim_in=embed_size, feat_dim=1)
-        self.projector = Head(dim_in=embed_size, feat_dim=128)
-
-        # loss
         self.supCon = SupConLoss()
-
-        # optimizer
-        self.ssl_optim = optim.Adam(self.encoder.parameters() + self.projector.parameters(),
-                                    lr=Config.LEARNING_RATE)
-        self.estimator_optim = optim.Adam(self.estimator_s.parameters() + self.estimator_t.parameters(),
-                                          lr=Config.LEARNING_RATE)
-
-        self.ssl_scheduler = optim.lr_scheduler.StepLR(
-            self.optim, step_size=5, gamma=0.95)
-        self.estimator_scheduler = optim.lr_scheduler.StepLR(
-            self.optim, step_size=5, gamma=0.95)
-
-
-    def forward_local_supCon(self, anchor, pos, label=None):
-        bz = anchor.shape[0]
-        feat = F.normalize(self.proj_local(F.normalize(self.encoder(
-            torch.cat([anchor, pos], dim=0).to(Config.DEVICE), aug=True))))
+        self.discriminator = Head(dim_in = 2 * embed_size, feat_dim = 1)
+        
+    def forward_supcon(self, feat,bz, label=None):
+        feat = F.normalize(feat)
         f1, f2 = torch.split(feat, [bz, bz], dim=0)
         feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
         return self.supCon(feat, label)
 
-    def forward_global_supCon(self, anchor, pos, label=None):
-        bz = anchor.shape[0]
-        pos = torch.cat(torch.split(pos, Config.GIM_SEGS * [1], dim=1), dim=0)
-        feat = self.encoder(
-            torch.cat([anchor, pos], dim=0).to(Config.DEVICE), aug=True)
-        feat_anchor, feat_pos = torch.split(feat, [bz, pos.shape[0]], dim=0)
-        feat_pos = torch.mean(torch.cat([f.unsqueeze(1) for f in torch.split(
-            feat_pos, Config.GIM_SEGS * [bz], dim=0)], dim=1), dim=1)
-        feat = F.normalize(self.proj_global(F.normalize(
-            torch.cat([feat_anchor, feat_pos], dim=0))))
-        f1, f2 = torch.split(feat, [bz, bz], dim=0)
-        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
-        return self.supCon(feat, label)
+    def forward_lim(self, feat, bz):
+        anchor, pos, diff = torch.split(feat, 3*[bz])
+        
+        x1 = torch.cat([anchor, pos], dim = 1)
+        x2 = torch.cat([anchor, diff], dim = 1)
+        X = self.discriminator(torch.cat([x1, x2], dim = 0))
+        
+        slen = X.shape[1]
+        label = torch.cat([torch.ones(x1.shape[0], slen), torch.zeros(x2.shape[0], slen)])
+        return F.binary_cross_entropy_with_logits(X, label)
+        
 
     def forward(self, ds_gen):
         data, _ = next(ds_gen)
+        
+        bz = data['anchor'].shape[0]
+        feat = self.encoder(torch.cat([data['anchor'], data['pos']], dim=0).to(Config.DEVICE), aug=True)
+        
         return {
-            # 'localSupCon': self.forward_local_supCon(data['anchor'], data['pos']),
-            'LIM': self.forward_lim(data['anchor'], data['pos'], data['diff'])
+            'simCLR': self.forward_supcon(feat, bz),
+            # 'LIM': self.forward_lim(data['anchor'], data['pos'], data['diff'])
         }
 
 

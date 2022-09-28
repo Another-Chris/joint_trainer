@@ -9,14 +9,15 @@ import torch.cuda
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_Joint_bothSSL_round2"
-# EXP_NAME = f"test"
+EXP_NAME = f"{MODEL_NAME}_Joint_bothNakedSSL"
+# EXP_NAME = 'test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
 TARGET_PATH = './data/cnceleb/data/'
 TARGET_LIST = './data/cnceleb_train.txt'
-PRE_TRAINED = './save/ECAPA_TDNN_Joint_bothSSL/encoder-30.model'
+# PRE_TRAINED = './save/ECAPA_TDNN_Joint_bothSSL/encoder-30.model'
+PRE_TRAINED = None
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 

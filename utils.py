@@ -16,20 +16,20 @@ import librosa.display
 
 class Config():
     GIM_SEGS = 3
-    MAX_EPOCH = 200
+    MAX_EPOCH = 300
     TEST_INTERVAL = 10
     NUM_WORKERS = 4
     BATCH_SIZE = 64
     NUM_CLASSES = 5994
     MAX_FRAMES = 200
-    LEARNING_RATE = 8e-4
+    LEARNING_RATE = 2e-4
     EMBED_SIZE = 256
     MUSAN_PATH = "./data/musan_split"
     RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"    
-    # TEST_PATH = "./data/cnceleb/eval/"
-    # TEST_LIST = "./data/cnceleb_test.txt"
-    TEST_PATH = "./data/voxceleb1_test/"
-    TEST_LIST = "./data/voxceleb_test.txt"
+    TEST_PATH = "./data/cnceleb/eval/"
+    TEST_LIST = "./data/cnceleb_test.txt"
+    # TEST_PATH = "./data/voxceleb1_test/"
+    # TEST_LIST = "./data/voxceleb_test.txt"
     DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
 
 def plot_batch(batch):

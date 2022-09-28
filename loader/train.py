@@ -156,14 +156,14 @@ class SimpleDataLoader(DsLoader):
 
     def __getitem__(self, idx):
         
-        diff_idx = np.random.randint(0, len(self.source_data))
-        while diff_idx == idx:
-            diff_idx = np.random.randint(0, len(self.source_data))
+        # diff_idx = np.random.randint(0, len(self.source_data))
+        # while diff_idx == idx:
+        #     diff_idx = np.random.randint(0, len(self.source_data))
 
         return {
             'anchor': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))),
             'pos': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))),
-            'diff': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[diff_idx], self.max_frames, evalmode=False)))
+            # 'diff': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[diff_idx], self.max_frames, evalmode=False)))
         }, self.source_label[idx]
 
 

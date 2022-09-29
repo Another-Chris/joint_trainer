@@ -18,7 +18,7 @@ sys.path.append("..")
 TEST_LIST = Config.TEST_LIST
 TEST_PATH = Config.TEST_PATH
 MODEL_NAME = 'ECAPA_TDNN'
-PRE_TRAINED = './save/ECAPA_TDNN_Joint_bothNakedSSL/encoder-110.model'
+PRE_TRAINED = './save/ECAPA_TDNN_simCLR_Voxceleb/encoder-60.model'
 NUM_WORKERS = 1
 
 
@@ -122,7 +122,7 @@ def evaluate(encoder):
 
 
 if __name__ == '__main__':
-    encoder = ECAPA_TDNN_WITH_FBANK(C = 512, embed_size=Config.EMBED_SIZE)
+    encoder = ECAPA_TDNN_WITH_FBANK(C = Config.C, embed_size=Config.EMBED_SIZE)
     
     if PRE_TRAINED is not None:
         encoder.load_state_dict(torch.load(PRE_TRAINED))

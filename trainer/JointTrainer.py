@@ -118,13 +118,9 @@ class JointTrainer(torch.nn.Module):
             for key, val in losses.items():
                 val = val.detach().cpu()
                 loss_val_dict[key] = (loss_val_dict.get(key, 0) + val)
-                self.writer.add_scalar(
-                    f"step/{key}", val, epoch * steps + step)
                 desc += f" {key} = {val :.4f}"
 
             loss = loss.detach().cpu().item()
-            self.writer.add_scalar(
-                f"step/loss", loss, epoch * steps + step)
             loss_val_dict['loss'] = (
                 loss_val_dict.get('loss', 0) + loss)
 

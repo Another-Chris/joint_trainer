@@ -220,8 +220,8 @@ class ECAPA_TDNN_WITH_FBANK(nn.Module):
             x = x - torch.mean(x, dim=-1, keepdim=True)
             if aug == True:
                 x = self.specaug(x)
-                x = self.conv1(x)
                 
+        x = self.conv1(x)        
         x = self.relu(x)
         x = self.bn1(x)
 

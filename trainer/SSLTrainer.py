@@ -20,7 +20,7 @@ class Workers(nn.Module):
 
         self.encoder = encoder
         self.supCon = SupConLoss()
-        # self.discriminator = Head(dim_in = 2 * embed_size, feat_dim = 1)
+        # self.head = Head(dim_in = 2 * embed_size, feat_dim = 1)
         
     def forward_supcon(self, feat,bz, label=None):
         feat = F.normalize(feat)
@@ -87,13 +87,9 @@ class SSLTrainer(torch.nn.Module):
             for key, val in losses.items():
                 val = val.detach().cpu()
                 loss_val_dict[key] = (loss_val_dict.get(key, 0) + val)
-                self.writer.add_scalar(
-                    f"step/{key}", val, epoch * steps + step)
                 desc += f" {key} = {val :.4f}"
 
             loss = loss.detach().cpu().item()
-            self.writer.add_scalar(
-                f"step/loss", loss, epoch * steps + step)
             loss_val_dict['loss'] = (
                 loss_val_dict.get('loss', 0) + loss)
 

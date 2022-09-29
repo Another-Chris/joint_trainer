@@ -14,8 +14,7 @@ EXP_NAME = f"{MODEL_NAME}_simCLR_VoxCeleb"
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
-# PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
-PRE_TRAINED = None
+PRE_TRAINED = './save/ECAPA_TDNN_simCLR_Voxceleb/encoder-110.model'
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 
@@ -41,6 +40,7 @@ if __name__ == "__main__":
     
     if PRE_TRAINED is not None:
         trainer.encoder.load_state_dict(torch.load(PRE_TRAINED))
+        print('pre-trained weight loaded!')
 
     # core training script
     for it in range(1, Config.MAX_EPOCH + 1):

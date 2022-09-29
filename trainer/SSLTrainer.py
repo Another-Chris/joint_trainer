@@ -20,7 +20,7 @@ class Workers(nn.Module):
 
         self.encoder = encoder
         self.supCon = SupConLoss()
-        # self.head = Head(dim_in = 2 * embed_size, feat_dim = 1)
+        self.cn_head = Head(dim_in = 2 * embed_size, feat_dim = 1)
         
     def forward_supcon(self, feat,bz, label=None):
         feat = F.normalize(feat)
@@ -44,7 +44,7 @@ class Workers(nn.Module):
         data, _ = next(ds_gen)
         
         bz = data['anchor'].shape[0]
-        feat = self.encoder(torch.cat([data['anchor'], data['pos']], dim=0).to(Config.DEVICE), aug=True)
+        feat = self.cn_head(F.normalize(self.encoder(torch.cat([data['anchor'], data['pos']], dim=0).to(Config.DEVICE), aug=True)))
         
         return {
             'simCLR': self.forward_supcon(feat, bz),

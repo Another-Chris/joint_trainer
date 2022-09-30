@@ -9,15 +9,14 @@ import torch.cuda
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_Joint_bothNakedSSL"
-# EXP_NAME = 'test'
+EXP_NAME = f"{MODEL_NAME}_Joint_withBigHead_freeze"
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
 TARGET_PATH = './data/cnceleb/data/'
-TARGET_LIST = './data/cnceleb_train.txt'
+TARGET_LIST = './data/cnceleb_train_gt5.txt'
 # PRE_TRAINED = './save/ECAPA_TDNN_Joint_bothSSL/encoder-30.model'
-PRE_TRAINED = None
+PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 
@@ -69,7 +68,7 @@ if __name__ == "__main__":
             trainer.scheduler.step()
 
         if it % Config.TEST_INTERVAL == 0:
-            eer, mindcf = evaluate(trainer.encoder)
+            eer, mindcf = evaluate(trainer.model)
             print(f'\n Epoch {it}, VEER {eer:.4f}, MinDCF: {mindcf:.5f}')
             trainer.writer.add_scalar('Eval/EER', eer, it)
             trainer.writer.add_scalar('Eval/MinDCF', mindcf, it)

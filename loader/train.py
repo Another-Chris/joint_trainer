@@ -115,6 +115,8 @@ class JointLoader(DsLoader):
         
     def __getitem__(self, idx):
        
+        # source_data = torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False)))
+        # source_label = self.source_label[idx]
         source_data, source_label = self.get_tuple(idx, self.source_data, self.source_label, eval_mode=False)
         
         tidx = np.random.randint(0, len(self.target_data))

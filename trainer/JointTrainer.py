@@ -1,11 +1,11 @@
 from models import BigHead, ECAPA_TDNN_WITH_FBANK
 from tqdm import tqdm
-from loss import SupConLoss
+from loss import SupConLoss,AAMsoftmax
 from utils import Config
 from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime as dt
 
 import torch
-import time
 import sys
 import torch.nn as nn
 import torch.nn.functional as F
@@ -18,10 +18,14 @@ class Workers(nn.Module):
         super().__init__()
 
         self.encoder = encoder
+        for params in self.encoder.parameters():
+            params.requires_grad = False 
+            
         self.feature_extractor = BigHead(dim_in = embed_size, feat_dim=128)
 
         # loss
         self.supCon = SupConLoss()
+        self.aamsoftmax = AAMsoftmax(n_class = Config.NUM_CLASSES, m = 0.2, s = 30)
         
     def forward_MI(self, source_data, target_data):
         bz = source_data['anchor'].shape[0]
@@ -52,29 +56,32 @@ class Workers(nn.Module):
         
         return F.binary_cross_entropy_with_logits(target, label.to(Config.DEVICE))
 
-    def forward_supcon(self, source_data, target_data, label=None):
-        
-        bz = source_data['anchor'].shape[0]
+    def forward_supcon(self, f1, f2, label=None):
+        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+        return self.supCon(feat, label)
+    
+    def forward_sup(self, f1,f2, label):
+        # return self.aamsoftmax(feat, label.to(Config.DEVICE))
+        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
+        return self.supCon(feat, label)
+    
+    def forward(self, x):
+        return F.normalize(self.feature_extractor(F.normalize(self.encoder(x))))
 
-        data = torch.cat(
-            [d for _, d in list(source_data.items()) + list(target_data.items())], dim=0)
-        embed = F.normalize(self.encoder(data.to(Config.DEVICE)))
-        s_anchor, s_pos, t_anchor, t_pos = torch.split(embed, 4 * [bz])
-        
-        feat_source = torch.cat([s_anchor.unsqueeze(1), s_pos.unsqueeze(1)], dim = 1)
-        feat_target = torch.cat([t_anchor.unsqueeze(1), t_pos.unsqueeze(1)], dim = 1)
-        
-        return (self.supCon(feat_source) + self.supCon(feat_target)) / 2
-
-    def forward(self, ds_gen):
+    def start_train(self, ds_gen):
         data, label = next(ds_gen)
 
         source_data = data['source_data']
         target_data = data['target_data']
+        bz = source_data['anchor'].shape[0]
+        data = torch.cat([source_data['anchor'],source_data['pos'] ,target_data['anchor'], target_data['pos']])
+        feat = F.normalize(self.feature_extractor(F.normalize(self.encoder(data.to(Config.DEVICE)))))
+        
+        s_anchor, s_pos, t_anchor, t_pos = torch.split(feat, 4 * [bz])
         
         return {
-            'supcon': self.forward_supcon(source_data, target_data),
-            # 'MI': self.forward_MI(source_data, target_data)
+            'supcon': self.forward_supcon(t_anchor, t_pos),
+            'sup': self.forward_sup(s_anchor, s_pos, label['source_label'])
         }
 
 
@@ -82,10 +89,11 @@ class JointTrainer(torch.nn.Module):
     def __init__(self, exp_name):
         super().__init__()
 
-        self.writer = SummaryWriter(log_dir=f"./logs/{exp_name}/{time.time()}")
+        self.writer = SummaryWriter(
+            log_dir=f"./logs/{exp_name}/{dt.now().strftime('%Y-%m-%d %H.%M.%S')}")
 
         self.encoder = ECAPA_TDNN_WITH_FBANK(
-            C=512, embed_size=Config.EMBED_SIZE)
+            C=Config.C, embed_size=Config.EMBED_SIZE)
         self.model = Workers(self.encoder, embed_size=Config.EMBED_SIZE)
         self.model.to(Config.DEVICE)
 
@@ -105,7 +113,7 @@ class JointTrainer(torch.nn.Module):
 
         for step in pbar:
 
-            losses = self.model(ds_gen)
+            losses = self.model.start_train(ds_gen)
             loss = torch.sum(torch.stack(list(losses.values())))
 
             self.optim.zero_grad()

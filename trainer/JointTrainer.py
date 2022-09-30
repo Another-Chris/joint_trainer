@@ -1,4 +1,4 @@
-from models import Head, ECAPA_TDNN_WITH_FBANK
+from models import BigHead, ECAPA_TDNN_WITH_FBANK
 from tqdm import tqdm
 from loss import SupConLoss
 from utils import Config
@@ -18,8 +18,7 @@ class Workers(nn.Module):
         super().__init__()
 
         self.encoder = encoder
-        self.projector = Head(dim_in=embed_size, feat_dim=128)
-        self.discriminator = Head(dim_in = 2 * embed_size, feat_dim = 1)
+        self.feature_extractor = BigHead(dim_in = embed_size, feat_dim=128)
 
         # loss
         self.supCon = SupConLoss()

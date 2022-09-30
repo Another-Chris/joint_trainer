@@ -13,7 +13,7 @@ MODEL_NAME = "ECAPA_TDNN"
 EXP_NAME = f"{MODEL_NAME}_SSLDAT_fineTune"
 EXP_NAME = 'test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
-SOURCE_LIST = './data/cnceleb_train_no_concat_gt5.txt'
+SOURCE_LIST = './data/cnceleb_train_no_concat_gt4.txt'
 SOURCE_PATH = './data/cnceleb/data/'
 PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
 
@@ -55,7 +55,7 @@ if __name__ == "__main__":
             desc += f" {key} = {val :.4f}"
 
         lr = trainer.scheduler.get_last_lr()[0]
-        desc += f' lr = {lr:8f}'
+        desc += f' lr = {lr:12f}'
         
         print(desc)
         

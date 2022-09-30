@@ -18,8 +18,8 @@ sys.path.append("..")
 TEST_LIST = Config.TEST_LIST
 TEST_PATH = Config.TEST_PATH
 MODEL_NAME = 'ECAPA_TDNN'
-# PRE_TRAINED = './save/ECAPA_TDNN_simCLR_Voxceleb/encoder-60.model'
-PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
+PRE_TRAINED = './save/ECAPA_TDNN_simCLR_CnCeleb_gt5/encoder-130.model'
+# PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
 NUM_WORKERS = 1
 
 

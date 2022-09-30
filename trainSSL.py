@@ -11,7 +11,7 @@ torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
 EXP_NAME = f"{MODEL_NAME}_SSLDAT_fineTune"
-# EXP_NAME = 'test'
+EXP_NAME = 'test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/cnceleb_train_no_concat_gt5.txt'
 SOURCE_PATH = './data/cnceleb/data/'
@@ -64,7 +64,7 @@ if __name__ == "__main__":
             trainer.scheduler.step()
         
         if it % Config.TEST_INTERVAL == 0:
-            eer, mindcf = evaluate(trainer.encoder)
+            eer, mindcf = evaluate(trainer.model)
             print(f'\n Epoch {it}, VEER {eer:.4f}, MinDCF: {mindcf:.5f}')
             trainer.writer.add_scalar('Eval/EER', eer, it)
             trainer.writer.add_scalar('Eval/MinDCF', mindcf, it)

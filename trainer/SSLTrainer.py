@@ -1,4 +1,4 @@
-from models import Head, ECAPA_TDNN_WITH_FBANK
+from models import ECAPA_TDNN_WITH_FBANK,BigHead
 from tqdm import tqdm
 from loss import SupConLoss
 from utils import Config
@@ -19,7 +19,7 @@ class Workers(nn.Module):
 
         self.encoder = encoder
         self.supCon = SupConLoss()
-        self.cn_head = Head(dim_in = 2 * embed_size, feat_dim = 1)
+        self.cn_head = BigHead(dim_in = embed_size, feat_dim = 128)
         
     def forward_supcon(self, feat,bz, label=None):
         feat = F.normalize(feat)
@@ -37,9 +37,11 @@ class Workers(nn.Module):
     #     slen = X.shape[1]
     #     label = torch.cat([torch.ones(x1.shape[0], slen), torch.zeros(x2.shape[0], slen)])
     #     return F.binary_cross_entropy_with_logits(X, label)
-        
+    
+    def forward(self, x):
+        return F.normalize(self.cn_head(F.normalize(self.encoder(x))))
 
-    def forward(self, ds_gen):
+    def start_train(self, ds_gen):
         data, _ = next(ds_gen)
         
         bz = data['anchor'].shape[0]
@@ -62,7 +64,10 @@ class SSLTrainer(torch.nn.Module):
         self.model = Workers(self.encoder, Config.EMBED_SIZE)
         self.model.to(Config.DEVICE)
         
-        self.optim = optim.Adam(self.model.parameters(), lr = Config.LEARNING_RATE)
+        self.optim = optim.Adam([
+            {'params': self.model.encoder.parameters(), 'lr': 1e-6},
+            {'params': self.model.cn_head.parameters(), 'lr': 5e-4}
+            ], lr = Config.LEARNING_RATE)
         self.scheduler = optim.lr_scheduler.StepLR(self.optim, step_size=5, gamma=0.95)
 
     def train_network(self, ds_gen, epoch):
@@ -75,7 +80,7 @@ class SSLTrainer(torch.nn.Module):
 
         for step in pbar:
 
-            losses = self.model(ds_gen)
+            losses = self.model.start_train(ds_gen)
             loss = torch.sum(torch.stack(list(losses.values())))
 
             self.optim.zero_grad()

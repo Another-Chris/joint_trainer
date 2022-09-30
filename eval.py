@@ -93,7 +93,6 @@ def evaluateFromList(encoder, test_list, test_path, num_eval=10):
         inp1 = data[0][0].cuda()
 
         with torch.no_grad():
-            
             ref_feat = encoder(inp1.unsqueeze(1)).detach().cpu()
         feats[data[1][0]] = ref_feat
 

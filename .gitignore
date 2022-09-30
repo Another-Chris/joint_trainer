@@ -11,4 +11,5 @@ venv
 __pycache__
 .pyc
 experiments
+.tar.gz
 test

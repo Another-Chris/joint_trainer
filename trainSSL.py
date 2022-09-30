@@ -8,13 +8,14 @@ import torch
 import torch.cuda
 torch.cuda.empty_cache()
 
+
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_simCLR_VoxCeleb"
+EXP_NAME = f"{MODEL_NAME}_SSLDAT_fineTune"
 # EXP_NAME = 'test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
-SOURCE_LIST = './data/voxceleb_train.txt'
-SOURCE_PATH = './data/voxceleb2/'
-PRE_TRAINED = './save/ECAPA_TDNN_simCLR_Voxceleb/encoder-110.model'
+SOURCE_LIST = './data/cnceleb_train_no_concat_gt5.txt'
+SOURCE_PATH = './data/cnceleb/data/'
+PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 
@@ -54,7 +55,7 @@ if __name__ == "__main__":
             desc += f" {key} = {val :.4f}"
 
         lr = trainer.scheduler.get_last_lr()[0]
-        desc += f' {lr = :8f}'
+        desc += f' lr = {lr:8f}'
         
         print(desc)
         

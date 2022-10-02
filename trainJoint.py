@@ -9,7 +9,7 @@ import torch.cuda
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_Joint_withBigHead_freeze"
+EXP_NAME = f"{MODEL_NAME}_Joint_withBigHead_fineTune"
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
@@ -61,9 +61,10 @@ if __name__ == "__main__":
         desc += f' {lr = :8f}'
 
         print(desc)
+        
+        torch.save(trainer.model.state_dict(),
+                   f'{MODEL_SAVE_PATH}/model-{it}.model')
 
-        torch.save(trainer.encoder.state_dict(),
-                   f'{MODEL_SAVE_PATH}/encoder-{it}.model')
         if lr > 1e-7:
             trainer.scheduler.step()
 
@@ -72,3 +73,5 @@ if __name__ == "__main__":
             print(f'\n Epoch {it}, VEER {eer:.4f}, MinDCF: {mindcf:.5f}')
             trainer.writer.add_scalar('Eval/EER', eer, it)
             trainer.writer.add_scalar('Eval/MinDCF', mindcf, it)
+            
+ 

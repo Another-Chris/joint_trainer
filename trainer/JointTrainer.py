@@ -1,6 +1,6 @@
 from models import BigHead, ECAPA_TDNN_WITH_FBANK
 from tqdm import tqdm
-from loss import SupConLoss,AAMsoftmax
+from loss import SupConLoss, AAMsoftmax
 from utils import Config
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime as dt
@@ -18,15 +18,15 @@ class Workers(nn.Module):
         super().__init__()
 
         self.encoder = encoder
-        for params in self.encoder.parameters():
-            params.requires_grad = False 
-            
-        self.feature_extractor = BigHead(dim_in = embed_size, feat_dim=128)
+        # for params in self.encoder.parameters():
+        #     params.requires_grad = False
+
+        self.feature_extractor = BigHead(dim_in=embed_size, feat_dim=128)
 
         # loss
         self.supCon = SupConLoss()
-        self.aamsoftmax = AAMsoftmax(n_class = Config.NUM_CLASSES, m = 0.2, s = 30)
-        
+        self.aamsoftmax = AAMsoftmax(n_class=Config.NUM_CLASSES, m=0.2, s=30)
+
     def forward_MI(self, source_data, target_data):
         bz = source_data['anchor'].shape[0]
 
@@ -46,25 +46,25 @@ class Workers(nn.Module):
             # torch.cat([s_anchor, t_anchor], dim=1),
             # torch.cat([s_pos, t_pos], dim=1),
         ], dim=0)
-        
-        target = self.discriminator(torch.cat([same_lan, diff_lan], dim = 0))
-        
+
+        target = self.discriminator(torch.cat([same_lan, diff_lan], dim=0))
+
         label = torch.cat([
-            torch.ones(size = (same_lan.shape[0], target.shape[1])),
-            torch.zeros(size = (diff_lan.shape[0], target.shape[1])),
+            torch.ones(size=(same_lan.shape[0], target.shape[1])),
+            torch.zeros(size=(diff_lan.shape[0], target.shape[1])),
         ])
-        
+
         return F.binary_cross_entropy_with_logits(target, label.to(Config.DEVICE))
 
     def forward_supcon(self, f1, f2, label=None):
         feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
         return self.supCon(feat, label)
-    
-    def forward_sup(self, f1,f2, label):
+
+    def forward_sup(self, f1, f2, label):
         # return self.aamsoftmax(feat, label.to(Config.DEVICE))
         feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
         return self.supCon(feat, label)
-    
+
     def forward(self, x):
         return F.normalize(self.feature_extractor(F.normalize(self.encoder(x))))
 
@@ -74,14 +74,16 @@ class Workers(nn.Module):
         source_data = data['source_data']
         target_data = data['target_data']
         bz = source_data['anchor'].shape[0]
-        data = torch.cat([source_data['anchor'],source_data['pos'] ,target_data['anchor'], target_data['pos']])
-        feat = F.normalize(self.feature_extractor(F.normalize(self.encoder(data.to(Config.DEVICE)))))
-        
+        data = torch.cat([source_data['anchor'], source_data['pos'],
+                         target_data['anchor'], target_data['pos']])
+        feat = F.normalize(self.feature_extractor(
+            F.normalize(self.encoder(data.to(Config.DEVICE)))))
+
         s_anchor, s_pos, t_anchor, t_pos = torch.split(feat, 4 * [bz])
-        
+
         return {
-            'supcon': self.forward_supcon(t_anchor, t_pos),
-            'sup': self.forward_sup(s_anchor, s_pos, label['source_label'])
+            'simCLR': self.forward_supcon(t_anchor, t_pos),
+            'supcon': self.forward_sup(s_anchor, s_pos, label['source_label'])
         }
 
 
@@ -98,8 +100,11 @@ class JointTrainer(torch.nn.Module):
         self.model.to(Config.DEVICE)
 
         # optimizer
-        self.optim = optim.Adam(self.model.parameters(),
-                                lr=Config.LEARNING_RATE)
+        self.optim = optim.Adam(
+            [{'params': self.model.encoder.parameters(), 'lr': 1e-5},
+             {'params': self.model.feature_extractor.parameters(), 'lr': 1e-4}],
+            lr=Config.LEARNING_RATE)
+        
         self.scheduler = optim.lr_scheduler.StepLR(
             self.optim, step_size=5, gamma=0.95)
 

@@ -10,12 +10,13 @@ torch.cuda.empty_cache()
 
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_SSLDAT_fineTune"
-EXP_NAME = 'test'
+EXP_NAME = f"{MODEL_NAME}_simCLR_CNCeleb_gt4"
+# EXP_NAME = 'test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
-SOURCE_LIST = './data/cnceleb_train_no_concat_gt4.txt'
+SOURCE_LIST = './data/cnceleb_train_gt4.txt'
 SOURCE_PATH = './data/cnceleb/data/'
-PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
+# PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
+PRE_TRAINED = None
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 

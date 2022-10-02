@@ -19,7 +19,6 @@ class Workers(nn.Module):
 
         self.encoder = encoder
         self.supCon = SupConLoss()
-        self.cn_head = BigHead(dim_in = embed_size, feat_dim = 128)
         
     def forward_supcon(self, feat,bz, label=None):
         feat = F.normalize(feat)
@@ -39,13 +38,13 @@ class Workers(nn.Module):
     #     return F.binary_cross_entropy_with_logits(X, label)
     
     def forward(self, x):
-        return F.normalize(self.cn_head(F.normalize(self.encoder(x))))
+        return F.normalize(self.encoder(x))
 
     def start_train(self, ds_gen):
         data, _ = next(ds_gen)
         
         bz = data['anchor'].shape[0]
-        feat = self.cn_head(F.normalize(self.encoder(torch.cat([data['anchor'], data['pos']], dim=0).to(Config.DEVICE), aug=True)))
+        feat = self.encoder(torch.cat([data['anchor'], data['pos']], dim=0).to(Config.DEVICE), aug=True)
         
         return {
             'simCLR': self.forward_supcon(feat, bz),
@@ -64,10 +63,7 @@ class SSLTrainer(torch.nn.Module):
         self.model = Workers(self.encoder, Config.EMBED_SIZE)
         self.model.to(Config.DEVICE)
         
-        self.optim = optim.Adam([
-            {'params': self.model.encoder.parameters(), 'lr': 1e-5},
-            {'params': self.model.cn_head.parameters(), 'lr': 1e-4}
-            ], lr = Config.LEARNING_RATE)
+        self.optim = optim.Adam(self.model.parameters(), lr = Config.LEARNING_RATE)
         self.scheduler = optim.lr_scheduler.StepLR(self.optim, step_size=5, gamma=0.95)
 
     def train_network(self, ds_gen, epoch):

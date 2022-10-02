@@ -22,7 +22,7 @@ class Config():
     BATCH_SIZE = 64
     NUM_CLASSES = 5994
     MAX_FRAMES = 200
-    LEARNING_RATE = 5e-4
+    LEARNING_RATE = 2e-4
     EMBED_SIZE = 192
     C = 1024
     MUSAN_PATH = "./data/musan_split"

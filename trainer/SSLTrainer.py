@@ -1,4 +1,4 @@
-from models import ECAPA_TDNN_WITH_FBANK,BigHead
+from models import ECAPA_TDNN_WITH_FBANK,Head
 from tqdm import tqdm
 from loss import SupConLoss
 from utils import Config
@@ -19,36 +19,29 @@ class Workers(nn.Module):
 
         self.encoder = encoder
         self.supCon = SupConLoss()
+        self.predictor = Head(dim_in = embed_size, feat_dim = 4, head = 'linear')
         
-    def forward_supcon(self, feat,bz, label=None):
-        feat = F.normalize(feat)
-        f1, f2 = torch.split(feat, [bz, bz], dim=0)
+    def forward_supcon(self, f1, f2, label=None):
         feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim=1)
         return self.supCon(feat, label)
-
-    # def forward_lim(self, feat, bz):
-    #     anchor, pos, diff = torch.split(feat, 3*[bz])
-        
-    #     x1 = torch.cat([anchor, pos], dim = 1)
-    #     x2 = torch.cat([anchor, diff], dim = 1)
-    #     X = self.discriminator(torch.cat([x1, x2], dim = 0))
-        
-    #     slen = X.shape[1]
-    #     label = torch.cat([torch.ones(x1.shape[0], slen), torch.zeros(x2.shape[0], slen)])
-    #     return F.binary_cross_entropy_with_logits(X, label)
+    
+    def forward_predictor(self, feat, label):
+        feat = self.predictor(feat)
+        return F.cross_entropy(feat, label.to(Config.DEVICE))
     
     def forward(self, x):
         return F.normalize(self.encoder(x))
 
     def start_train(self, ds_gen):
-        data, _ = next(ds_gen)
+        data, label = next(ds_gen)
         
         bz = data['anchor'].shape[0]
-        feat = self.encoder(torch.cat([data['anchor'], data['pos']], dim=0).to(Config.DEVICE), aug=True)
+        feat = self.encoder(torch.cat([data['anchor'], data['pos'], data['aug']], dim=0).to(Config.DEVICE), aug=True)
+        anchor, pos, aug = torch.split(feat, 3 * [bz])
         
         return {
-            'simCLR': self.forward_supcon(feat, bz),
-            # 'LIM': self.forward_lim(data['anchor'], data['pos'], data['diff'])
+            'simCLR': self.forward_supcon(anchor, pos, bz),
+            'predictor': self.forward_predictor(aug, label['augtype'])
         }
 
 

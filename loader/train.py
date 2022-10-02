@@ -1,4 +1,4 @@
-from .utils import load_wav
+from .utils import load_wav, transform
 from .augment import AugmentWAV
 from utils import Config
 
@@ -87,40 +87,46 @@ class DsLoader():
         diff_idx = np.random.randint(0, len(data_list))
         while diff_idx == idx:
             diff_idx = np.random.randint(0, len(data_list))
-            
-        anchor = self.augment_audio(load_wav(data_list[idx], self.max_frames, evalmode=eval_mode, num_eval = num_eval))
-        pos = self.augment_audio(load_wav(data_list[idx], self.max_frames, evalmode=eval_mode, num_eval = num_eval))
-        diff = self.augment_audio(load_wav(data_list[diff_idx], self.max_frames, evalmode=eval_mode, num_eval = num_eval))
-        
+
+        anchor = self.augment_audio(load_wav(
+            data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
+        pos = self.augment_audio(load_wav(
+            data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
+        diff = self.augment_audio(load_wav(
+            data_list[diff_idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
+
         return {
             'anchor': anchor, 'pos': pos, 'diff': diff
         }, {
             'anchor': label_list[idx], 'diff': label_list[diff_idx]
         }
 
-    
-    def get_tuple(self, idx, data_list, label_list, eval_mode, num_eval = Config.GIM_SEGS):
-        anchor = self.augment_audio(load_wav(data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
-        pos = self.augment_audio(load_wav(data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
-        
+    def get_tuple(self, idx, data_list, label_list, eval_mode, num_eval=Config.GIM_SEGS):
+        anchor = self.augment_audio(load_wav(
+            data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
+        pos = self.augment_audio(load_wav(
+            data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
+
         anchor = torch.FloatTensor(anchor)
         pos = torch.FloatTensor(pos)
-        
+
         return {'anchor': anchor, 'pos': pos}, label_list[idx]
 
 
 class JointLoader(DsLoader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        
+
     def __getitem__(self, idx):
-       
+
         # source_data = torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False)))
         # source_label = self.source_label[idx]
-        source_data, source_label = self.get_tuple(idx, self.source_data, self.source_label, eval_mode=False)
-        
+        source_data, source_label = self.get_tuple(
+            idx, self.source_data, self.source_label, eval_mode=False)
+
         tidx = np.random.randint(0, len(self.target_data))
-        target_data, target_label = self.get_tuple(tidx, self.target_data, self.target_label, eval_mode=False)
+        target_data, target_label = self.get_tuple(
+            tidx, self.target_data, self.target_label, eval_mode=False)
 
         return {
             'source_data': source_data,
@@ -152,12 +158,14 @@ class SourceDataLoader(DsLoader):
         return {key: torch.FloatTensor(value) for key, value in data.items()}, label
 
 # a pair of augmented data
+
+
 class SimpleDataLoader(DsLoader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def __getitem__(self, idx):
-        
+
         # diff_idx = np.random.randint(0, len(self.source_data))
         # while diff_idx == idx:
         #     diff_idx = np.random.randint(0, len(self.source_data))
@@ -180,24 +188,20 @@ class FullSupConDataLoader(DsLoader):
             'pos': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=True, num_eval=Config.GIM_SEGS)))
         }, self.source_label[idx]
 
-class AugTypeDataLoader(DsLoader):
+
+class AugmentDataLoader(DsLoader):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def __getitem__(self, idx):
 
-        anchor, anchor_aug = self.augment_audio(
-            load_wav(self.source_data[idx], self.max_frames, evalmode=False), return_type=True)
-        pos, pos_aug = self.augment_audio(
-            load_wav(self.source_data[idx], self.max_frames, evalmode=False), return_type=True)
-
-        anchor = torch.FloatTensor(anchor)
-        pos = torch.FloatTensor(pos)
+        aug, augtype = transform(
+            load_wav(self.source_data[idx], max_frames=Config.MAX_FRAMES, evalmode=False))
 
         return {
-            'anchor': anchor,
-            'pos': pos
-        }, self.source_label[idx], {
-            'anchor': anchor_aug,
-            'pos': pos_aug
-        }
+            'anchor': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))),
+            'pos': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))),
+            'aug': aug
+        }, {
+            'label': self.source_label[idx],
+            'augtype': augtype}

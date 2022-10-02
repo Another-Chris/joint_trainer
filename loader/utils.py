@@ -3,6 +3,10 @@ import random
 import numpy as np
 import soundfile as sf 
 
+from audiomentations import AddGaussianNoise,  PitchShift, Shift, BandStopFilter
+
+
+
 
 
 def worker_init_fn(worker_id): np.random.seed(
@@ -39,3 +43,24 @@ def load_wav(filename, max_frames, evalmode=True, num_eval=10):
     feat = np.stack(feats, axis=0).astype(np.float)
 
     return feat
+
+
+def transform(signal):
+    sr = 16000
+    signal = signal.astype(np.float32)
+    t0 = AddGaussianNoise(min_amplitude=0.01, max_amplitude=0.03, p=1)
+    t1 = BandStopFilter(p = 1)
+    t2 = PitchShift(min_semitones=-2, max_semitones=1, p=1)
+    t3 = Shift(min_fraction=-0.5, max_fraction=0.5, p=1)
+    
+    aug_type = np.random.randint(0,4)
+    if aug_type == 0:
+        signal = t0(signal, sample_rate = sr)
+    if aug_type == 1:
+        signal = t1(signal, sample_rate = sr)
+    if aug_type == 2:
+        signal = t2(signal, sample_rate = sr)
+    if aug_type == 3:
+        signal = t3(signal, sample_rate = sr)
+    return signal, aug_type
+

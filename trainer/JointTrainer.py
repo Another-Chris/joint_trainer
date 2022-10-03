@@ -1,4 +1,4 @@
-from models import BigHead, ECAPA_TDNN_WITH_FBANK
+from models import Head, ECAPA_TDNN_WITH_FBANK
 from tqdm import tqdm
 from loss import SupConLoss, AAMsoftmax
 from utils import Config
@@ -18,10 +18,9 @@ class Workers(nn.Module):
         super().__init__()
 
         self.encoder = encoder
-        # for params in self.encoder.parameters():
-        #     params.requires_grad = False
-
-        self.feature_extractor = BigHead(dim_in=embed_size, feat_dim=128)
+        self.source = Head(dim_in = embed_size, feat_dim=128)
+        self.target = Head(dim_in = embed_size, feat_dim=128)
+        self.feature_extractor = Head(dim_in = 2 * 128, feat_dim=2*128, head = 'linear')
 
         # loss
         self.supCon = SupConLoss()
@@ -66,7 +65,11 @@ class Workers(nn.Module):
         return self.supCon(feat, label)
 
     def forward(self, x):
-        return F.normalize(self.feature_extractor(F.normalize(self.encoder(x))))
+        x = F.normalize(self.encoder(x))
+        s = self.source(x)
+        t = self.target(t)
+        x = self.feature_extractor(torch.cat([s,t], dim = 1))
+        return F.normalize(x)
 
     def start_train(self, ds_gen):
         data, label = next(ds_gen)
@@ -74,16 +77,24 @@ class Workers(nn.Module):
         source_data = data['source_data']
         target_data = data['target_data']
         bz = source_data['anchor'].shape[0]
-        data = torch.cat([source_data['anchor'], source_data['pos'],
-                         target_data['anchor'], target_data['pos']])
-        feat = F.normalize(self.feature_extractor(
-            F.normalize(self.encoder(data.to(Config.DEVICE)))))
-
+        data = torch.cat([
+            source_data['anchor'], 
+            source_data['pos'],
+            target_data['anchor'], 
+            target_data['pos']]
+        )
+        feat = F.normalize(self.encoder(data.to(Config.DEVICE), aug = True))
         s_anchor, s_pos, t_anchor, t_pos = torch.split(feat, 4 * [bz])
-
+        
+        s_anchor, s_pos = self.source(s_anchor), self.source(s_pos)
+        t_anchor, t_pos = self.target(t_anchor), self.target(t_pos)
+        
+        anchor = F.normalize(self.feature_extractor(torch.cat([s_anchor, t_anchor], dim =1 )))
+        pos = F.normalize(self.feature_extractor(torch.cat([s_pos, t_pos], dim = 1 )))
+        
         return {
-            'simCLR': self.forward_supcon(t_anchor, t_pos),
-            'supcon': self.forward_sup(s_anchor, s_pos, label['source_label'])
+            'simCLR': self.forward_supcon(anchor, pos),
+            'sup': self.forward_sup(anchor, pos, label['source_label'])
         }
 
 
@@ -102,7 +113,10 @@ class JointTrainer(torch.nn.Module):
         # optimizer
         self.optim = optim.Adam(
             [{'params': self.model.encoder.parameters(), 'lr': 1e-5},
-             {'params': self.model.feature_extractor.parameters(), 'lr': 1e-4}],
+             {'params': self.model.feature_extractor.parameters(), 'lr': 1e-4},
+             {'params': self.model.source.parameters(), 'lr': 1e-4},
+             {'params': self.model.target.parameters(), 'lr': 1e-4},
+            ],
             lr=Config.LEARNING_RATE)
         
         self.scheduler = optim.lr_scheduler.StepLR(

@@ -1,53 +1,66 @@
+from glob import glob
 from tqdm import tqdm
 from loader import test_dataset_loader
 from joblib import Parallel, delayed
 from tuneThreshold import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
 from utils import Config
 from models import ECAPA_TDNN_WITH_FBANK
+from trainer import JointTrainer
 
 import torch.nn.functional as F
 import random
 import torch
 import itertools
 import sys
+import multiprocessing
+import os
+import glob
 
 import numpy as np
+import pandas as pd
 
 sys.path.append("..")
 
 TEST_LIST = Config.TEST_LIST
 TEST_PATH = Config.TEST_PATH
 MODEL_NAME = 'ECAPA_TDNN'
-PRE_TRAINED = './save/ECAPA_TDNN_simCLR_CnCeleb_gt5/encoder-130.model'
+PRE_TRAINED = './save/ECAPA_TDNN_SSL_enlargeDs/model-60.model'
 # PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
 NUM_WORKERS = 1
 
 
-def compute_one_score(all_scores, all_labels, all_trials, line, feats, num_eval):
+def compute_one_score(lines, feats, num_eval, position):
+    
+    all_scores = []
+    all_labels = []
+    all_trails = []
 
-    data = line.split()
+    for line in tqdm(lines, position = position):
+        data = line.split()
 
-    # Append random label if missing
-    if len(data) == 2:
-        data = [random.randint(0, 1)] + data
+        # Append random label if missing
+        if len(data) == 2:
+            data = [random.randint(0, 1)] + data
 
-    ref_feat = feats[data[1]].cuda()
-    com_feat = feats[data[2]].cuda()
+        ref_feat = feats[data[1]].cuda()
+        com_feat = feats[data[2]].cuda()
 
-    # normalize feature
-    ref_feat = F.normalize(ref_feat, p=2, dim=1)
-    com_feat = F.normalize(com_feat, p=2, dim=1)
+        # normalize feature
+        ref_feat = F.normalize(ref_feat, p=2, dim=1)
+        com_feat = F.normalize(com_feat, p=2, dim=1)
 
-    # euclidean dis
-    dist = torch.cdist(ref_feat.reshape(
-        num_eval, -1), com_feat.reshape(num_eval, -1)).cpu().numpy()
+        # euclidean dis
+        dist = torch.cdist(ref_feat.reshape(
+            num_eval, -1), com_feat.reshape(num_eval, -1)).cpu().numpy()
 
-    score = -1 * np.mean(dist)
+        score = -1 * np.mean(dist)
 
-    all_scores.append(score)
-    all_labels.append(int(data[0]))
-    all_trials.append(data[1] + " " + data[2])
-
+        all_scores.append(score)
+        all_labels.append(int(data[0]))
+        all_trails.append(data[1] + " " + data[2])
+        
+    df = pd.DataFrame({'all_scores': all_scores, 'all_labels': all_labels, 'all_trails': all_trails})
+    df.to_csv(f'./{position}.csv', index = False)
 
 
 def evaluateFromList(encoder, test_list, test_path, num_eval=10):
@@ -62,7 +75,7 @@ def evaluateFromList(encoder, test_list, test_path, num_eval=10):
     # Read all lines
     with open(test_list) as f:
         lines = f.readlines()
-
+    
     # Get a list of unique file names
     files = list(itertools.chain(*[x.strip().split()[-2:] for x in lines]))
     setfiles = list(set(files))
@@ -97,16 +110,30 @@ def evaluateFromList(encoder, test_list, test_path, num_eval=10):
         feats[data[1][0]] = ref_feat
 
     ########## compute the scores ##########
-    all_scores = []
-    all_labels = []
-    all_trials = []
+    nprocess = 6
+    items_per_p = len(lines) // nprocess + 1
+    ps = []
+    for n in range(nprocess):
+        line_seg = lines[n*items_per_p : (n+1) * items_per_p]
+        p = multiprocessing.Process(compute_one_score, args = (line_seg, feats, num_eval, n))
+        p.start()
+        ps.append(p)
+    for p in ps:
+        p.join()
+            
 
-    Parallel(n_jobs=4, backend="threading")(
-        delayed(compute_one_score)
-        (all_scores, all_labels, all_trials, line, feats, num_eval)
-        for line in tqdm(lines))
+    score_files = glob.glob("*.csv")
+    df = pd.DataFrame({'all_scores': [], 'all_labels': [], 'all_trails': []})
+    for file in score_files:
+        df = pd.concat([df, pd.read_csv(file)], axis = 0)
+        os.unlink(file)
+    
+    all_scores = df['all_scores']
+    all_labels = df['all_labels']
+    all_trails = df['all_trails']
+        
 
-    return (all_scores, all_labels, all_trials)
+    return (all_scores, all_labels, all_trails)
 
 
 def evaluate(encoder):
@@ -123,12 +150,12 @@ def evaluate(encoder):
 
 
 if __name__ == '__main__':
-    encoder = ECAPA_TDNN_WITH_FBANK(C = Config.C, embed_size=Config.EMBED_SIZE)
+    trainer = JointTrainer(exp_name='eval')
     
     if PRE_TRAINED is not None:
-        encoder.load_state_dict(torch.load(PRE_TRAINED))
+        trainer.model.load_state_dict(torch.load(PRE_TRAINED))
         print('pre-trained weight loaded!')
     
-    eer, mindcf = evaluate(encoder)
+    eer, mindcf = evaluate(trainer.encoder)
     print(f'eer = {eer:.4f}, mindcf = {mindcf:.4f}')
     

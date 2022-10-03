@@ -1,12 +1,15 @@
 from .utils import load_wav
 from .augment import AugmentWAV
 from utils import Config
+from audiomentations import Shift
 
 import os
 import torch
 
 import numpy as np
 
+
+shift = Shift(p = 1)
 
 def get_data_from_file(data_root, filename):
 
@@ -59,7 +62,7 @@ class DsLoader():
 
     def augment_audio(self, audio, return_type=False):
 
-        augtype = [0]
+        augtype = [0]        
         if np.random.random() < 0.8:
             audio = self.augment_wav.reverberate(audio)
             augtype.append(1)
@@ -77,6 +80,9 @@ class DsLoader():
 
         if return_type:
             return audio, sum(augtype)
+    
+        audio = shift(audio.astype(np.float32), sample_rate = 16000)
+        
         return audio
 
     def __len__(self):

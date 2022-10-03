@@ -3,6 +3,8 @@ import random
 import numpy as np
 import soundfile as sf 
 
+from audiomentations import AddGaussianNoise,  PitchShift, Shift, BandStopFilter
+
 
 
 def worker_init_fn(worker_id): np.random.seed(

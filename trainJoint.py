@@ -10,7 +10,7 @@ import multiprocessing
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_DAT_normal_32bz"
+EXP_NAME = f"{MODEL_NAME}_joint_DSBN"
 # EXP_NAME = 'test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'

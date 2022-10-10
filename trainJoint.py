@@ -18,7 +18,7 @@ SOURCE_PATH = './data/voxceleb2/'
 TARGET_PATH = './data/cnceleb/data/'
 TARGET_LIST = './data/cnceleb_train_gt5.txt'
 # PRE_TRAINED = f"./save/{MODEL_NAME}_SSL_enlargeDs/model-20.model"
-PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
+PRE_TRAINED = './pre_trained/ECAPA_TDNN_NEW.model'
 # PRE_TRAINED = None
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     trainer = JointTrainer(exp_name=EXP_NAME)
 
     if PRE_TRAINED is not None:
-        trainer.model.encoder.load_state_dict(torch.load(PRE_TRAINED))
+        trainer.model.encoder.load_state_dict(torch.load(PRE_TRAINED), strict = False)
         print('pre-trained weight loaded!')
 
     # core training script

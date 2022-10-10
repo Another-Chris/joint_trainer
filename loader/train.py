@@ -121,18 +121,19 @@ class JointLoader(DsLoader):
         
         ## two segments
         # source_data, source_label = self.get_tuple(idx, self.source_data, self.source_label, eval_mode=False)
-        # tidx = np.random.randint(0, len(self.target_data))
-        # target_data, target_label = self.get_tuple(tidx, self.target_data, self.target_label, eval_mode=False)
+        tidx = np.random.randint(0, len(self.target_data))
+        target_data, target_label = self.get_tuple(tidx, self.target_data, self.target_label, eval_mode=False)
         
 
         ## one segment
         source_data = torch.FloatTensor(
             self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
-        source_label = self.source_label[idx]        
-        tidx = np.random.randint(0, len(self.target_data))
-        target_data = torch.FloatTensor(
-            self.augment_audio(load_wav(self.target_data[tidx], self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
-        target_label = self.target_label[tidx]
+        source_label = self.source_label[idx]     
+           
+        # tidx = np.random.randint(0, len(self.target_data))
+        # target_data = torch.FloatTensor(
+        #     self.augment_audio(load_wav(self.target_data[tidx], self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
+        # target_label = self.target_label[tidx]
 
         return {
             'source_data': source_data,

@@ -18,7 +18,7 @@ class Config():
     GIM_SEGS = 3
     MAX_EPOCH = 300
     TEST_INTERVAL = 10
-    NUM_WORKERS = 6
+    NUM_WORKERS = 1
     BATCH_SIZE = 32
     NUM_CLASSES = 5994
     MAX_FRAMES = 200

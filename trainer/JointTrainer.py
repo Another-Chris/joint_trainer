@@ -1,6 +1,7 @@
 from models import Head, ECAPA_TDNN_WITH_FBANK, BigHead
 from tqdm import tqdm
 from loss import SupConLoss, AAMsoftmax
+from models.encoders.ECAPA_TDNN import ECAPA_TDNN_WITH_DSBN
 from utils import Config
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime as dt
@@ -39,44 +40,19 @@ class Workers(nn.Module):
         super().__init__()
 
         self.encoder = encoder
-        # self.speaker_predictor = Head(dim_in = 3072, feat_dim = 1024, head = 'linear')
-        self.language_predictor = BigHead(dim_in = embed_size, feat_dim = 1, hidden_size = 512)
-        
         self.supcon = SupConLoss()
         self.aamsoftmax = AAMsoftmax(m = 0.2, s = 30, n_class = Config.NUM_CLASSES, n_embed = embed_size)
-        # self.bn_source = nn.BatchNorm1d(embed_size)
-        # self.bn_target = nn.BatchNorm1d(embed_size)
-        # self.bn =  nn.BatchNorm1d(embed_size)
-        self.dp = nn.Dropout(0.5)
     
     def forward(self, x):
-        # return F.normalize(self.encoder(x))
         return self.encoder(x)
     
-    def predict(self, feat, label):
-        # aamsoftmax
-        # feat = self.speaker_predictor(feat)
-        return self.aamsoftmax(feat, label.to(Config.DEVICE))
+    def loss_simCLR(self, feat, label = None):
+        feat = F.normalize(feat)
+        bz = feat.shape[0] // 2
+        f1, f2 = torch.split(feat, [bz,bz])
+        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
+        return self.supcon(feat, label)
         
-        ## cross entropy
-        # return F.cross_entropy(self.speaker_predictor(feat), label.to(Config.DEVICE))
-    
-        ## supcon
-        # feat = F.normalize(self.speaker_predictor(feat))
-        # bz = feat.shape[0] // 2
-        # f1, f2 = torch.split(feat, [bz,bz])
-        # feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
-        # return self.supcon(feat, label)
-    
-    def language(self, feat, label):
-        # bce style
-        label = label.unsqueeze(1)
-        return F.binary_cross_entropy_with_logits(self.language_predictor(feat), label.to(Config.DEVICE))
-        
-        ## nll style
-        # feat = F.log_softmax(self.language_predictor(feat), dim = 1)
-        # label = label.to(Config.DEVICE)
-        # return F.nll_loss(feat, label) 
 
     def start_train(self, ds_gen, alpha):
         data, label = next(ds_gen)
@@ -84,34 +60,20 @@ class Workers(nn.Module):
         """source domain""" 
         # source_data = torch.cat([data['source_data']['anchor'], data['source_data']['pos']], dim = 0)
         source_data = data['source_data']
-        source_feat = self.forward(source_data.to(Config.DEVICE))       
-        spk_loss = self.predict(source_feat, label['source_label'])
-        # if type(source_feat) == tuple:
-        #     source_feat, source_embed = source_feat
-        #     spk_loss = self.predict(source_embed), label['source_label']
+        source_feat = self.encoder(source_data.to(Config.DEVICE), 'source')       
+        spk_loss = self.aamsoftmax(source_feat, label['source_label'].to(Config.DEVICE))
             
         
         """target domain"""     
-        # target_data = torch.cat([data['target_data']['anchor'], data['target_data']['pos']], dim = 0)
-        target_data = data['target_data']
-        target_feat = self.forward(target_data.to(Config.DEVICE))
-        # if type(target_feat) == tuple:
-        #     target_feat, _ = target_feat        
+        # target_data = data['target_data']
+        target_data = torch.cat([data['target_data']['anchor'], data['target_data']['pos']], dim = 0)
+        target_feat = self.encoder(target_data.to(Config.DEVICE), 'target')
+        simCLR = self.loss_simCLR(target_feat)        
         
-        """language loss"""
-        source_lan_label = torch.zeros(size = (source_feat.shape[0], ))
-        target_lan_label = torch.ones(size = (target_feat.shape[0], ))
-        # source_lan_loss = self.language(grad_reverse(F.relu(self.bn_source(source_feat)), alpha), source_lan_label)
-        # target_lan_loss = self.language(grad_reverse(F.relu(self.bn_target(target_feat)), alpha), target_lan_label)
-        lan_feat = grad_reverse(torch.cat([source_feat, target_feat], dim = 0), alpha)
-        lan_label = torch.cat([source_lan_label, target_lan_label], dim = 0)
-        lan_loss = self.language(lan_feat, lan_label)
         
         return {
             'spk_loss': spk_loss,
-            # 'source_lan': source_lan_loss,
-            # 'target_lan': target_lan_loss,
-            'lan_loss': lan_loss
+            'simCLR': simCLR
         }
 
 
@@ -122,16 +84,11 @@ class JointTrainer(torch.nn.Module):
         self.writer = SummaryWriter(
             log_dir=f"./logs/{exp_name}/{dt.now().strftime('%Y-%m-%d %H.%M.%S')}")
 
-        self.encoder = ECAPA_TDNN_WITH_FBANK(
+        self.encoder = ECAPA_TDNN_WITH_DSBN(
             C=Config.C, embed_size=Config.EMBED_SIZE)
         self.model = Workers(self.encoder, embed_size=Config.EMBED_SIZE)
         self.model.to(Config.DEVICE)
-        
-        # self.optim = optim.Adam([
-        #     {'params': self.model.speaker_predictor.parameters(), 'lr': 1e-3},
-        #     {'params': self.model.encoder.parameters(), 'lr': 5e-4},
-        #     {'params': self.model.language_predictor.parameters(), 'lr': 1e-3}
-        # ], lr = Config.LEARNING_RATE)
+
         
         self.optim = optim.Adam(self.model.parameters(), lr = Config.LEARNING_RATE)
         

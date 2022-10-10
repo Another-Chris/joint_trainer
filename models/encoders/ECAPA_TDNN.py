@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+
+"""common blocks"""               
 class SEModule(nn.Module):
     def __init__(self, channels, bottleneck=128):
         super(SEModule, self).__init__()
@@ -122,7 +124,7 @@ class FbankAug(nn.Module):
         x = self.mask_along_axis(x, dim=1)
         return x
     
-
+"""naked ECAPA_TDNN"""
 class ECAPA_TDNN(nn.Module):
 
     def __init__(self, C, in_channel, embed_size):
@@ -180,8 +182,8 @@ class ECAPA_TDNN(nn.Module):
         x = self.bn6(x)
         
         return x
-    
-    
+
+"""ECAPA_TDNN_WITH_FBANK"""       
 class ECAPA_TDNN_WITH_FBANK(nn.Module):
     def __init__(self, C, embed_size) -> None:
         
@@ -252,11 +254,98 @@ class ECAPA_TDNN_WITH_FBANK(nn.Module):
 
         return embed
     
+"""ECAPA_TDNN with DSBN""" 
+class DSBN(nn.Module):
+    def __init__(self, size) -> None:
+        super().__init__()
+
+        self.bn_source = nn.BatchNorm1d(size)
+        self.bn_target = nn.BatchNorm1d(size)
+
+    def forward(self, x, domain):
+        if domain == 'source':
+            return self.bn_source(x)
+        elif domain == 'target':
+            return self.bn_target(x)
+        else:
+            raise ValueError("please specify a domain")
+
+class Attention(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
         
+        self.conv1 = nn.Conv1d(4608, 256, kernel_size=1)
+        self.bn = DSBN(256)
+        self.conv2 = nn.Conv1d(256, 1536, kernel_size=1)
     
-def get_ecapa_tdnn(C, embed_size):
-    return ECAPA_TDNN(C, embed_size)
+    def forward(self, x, domain):
+        x = self.conv1(x)
+        x = F.relu(x)
+        x = self.bn(x, domain)
+        x = F.tanh(x)
+        x = self.conv2(x)
+        x = F.softmax(x, dim = 2)
+        return x
+ 
+class ECAPA_TDNN_WITH_DSBN(nn.Module):
+    def __init__(self, C, embed_size) -> None:
 
-def get_ecapa_tdnn_with_fbank(C, embed_size):
-    return ECAPA_TDNN_WITH_FBANK(C, embed_size)
+        super().__init__()
 
+        self.torchfbank = torch.nn.Sequential(
+            PreEmphasis(),
+            torchaudio.transforms.MelSpectrogram(sample_rate=16000, n_fft=512, win_length=400, hop_length=160,
+                                                f_min=20, f_max=7600, window_fn=torch.hamming_window, n_mels=80),
+        )
+
+        self.specaug = FbankAug()  # Spec augmentation
+
+        self.conv1 = nn.Conv1d(80, C, kernel_size=5, stride=1, padding=2)
+        self.relu = nn.ReLU()
+        self.bn1 = DSBN(C)
+        self.layer1 = Bottle2neck(C, C, kernel_size=3, dilation=2, scale=8)
+        self.layer2 = Bottle2neck(C, C, kernel_size=3, dilation=3, scale=8)
+        self.layer3 = Bottle2neck(C, C, kernel_size=3, dilation=4, scale=8)
+        # I fixed the shape of the output from MFA layer, that is close to the setting from ECAPA paper.
+        self.layer4 = nn.Conv1d(3*C, 1536, kernel_size=1)
+        self.attention = Attention()
+
+        self.bn5 = DSBN(3072)
+        self.fc6 = nn.Linear(3072, embed_size)
+        self.bn6 = DSBN(embed_size)
+
+    def forward(self, x, domain, aug=False):
+        with torch.no_grad():
+            x = self.torchfbank(x)+1e-6
+            x = x.log()
+            x = x - torch.mean(x, dim=-1, keepdim=True)
+            if aug == True:
+                x = self.specaug(x)
+
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.bn1(x, domain)
+
+        x1 = self.layer1(x, domain)
+        x2 = self.layer2(x+x1, domain)
+        x3 = self.layer3(x+x1+x2, domain)
+        x = self.layer4(torch.cat((x1, x2, x3), dim=1))
+
+        x = self.relu(x)
+
+        t = x.size()[-1]
+
+        global_x = torch.cat((x, torch.mean(x, dim=2, keepdim=True).repeat(1, 1, t), torch.sqrt(
+            torch.var(x, dim=2, keepdim=True).clamp(min=1e-4)).repeat(1, 1, t)), dim=1)
+
+        w = self.attention(global_x, domain)
+
+        mu = torch.sum(x * w, dim=2)
+        sg = torch.sqrt((torch.sum((x**2) * w, dim=2) - mu**2).clamp(min=1e-4))
+
+        x = torch.cat((mu, sg), 1)
+        x = self.bn5(x, domain)
+        x = self.fc6(x)
+        x = self.bn6(x, domain)
+        return x      
+    

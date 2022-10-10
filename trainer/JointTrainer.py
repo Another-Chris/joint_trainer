@@ -34,7 +34,6 @@ def grad_reverse(x, alpha):
     return ReverseLayerF.apply(x,alpha)
     
     
-    
 class Workers(nn.Module):
     def __init__(self, encoder, embed_size) -> None:
         super().__init__()

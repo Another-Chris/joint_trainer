@@ -1,5 +1,4 @@
 from .encoders.ResNetSE34L import MainModel as ResNetSE34L
-from .encoders.ECAPA_TDNN import MainModel as ECAPA_TDNN
-from .encoders.pase.models.frontend import wf_builder as PASE
+from .encoders.ECAPA_TDNN import ECAPA_TDNN, ECAPA_TDNN_WITH_FBANK, ECAPA_TDNN_WITH_DSBN
 from .workers.Head import Head
-from .transforms import FbankAug, Torchfbank, TorchMFCC
+from .workers.BigHead import BigHead

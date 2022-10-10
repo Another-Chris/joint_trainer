@@ -170,12 +170,15 @@ class ECAPA_TDNN(nn.Module):
 
         mu = torch.sum(x * w, dim=2)
         sg = torch.sqrt( ( torch.sum((x**2) * w, dim=2) - mu**2 ).clamp(min=1e-4) )
-
+        
+        # hierarchy representation
         x = torch.cat((mu,sg),1)
+        
+        # goes to the classifier 
         x = self.bn5(x)
         x = self.fc6(x)
         x = self.bn6(x)
-
+        
         return x
     
     
@@ -241,12 +244,13 @@ class ECAPA_TDNN_WITH_FBANK(nn.Module):
         mu = torch.sum(x * w, dim=2)
         sg = torch.sqrt( ( torch.sum((x**2) * w, dim=2) - mu**2 ).clamp(min=1e-4) )
 
-        x = torch.cat((mu,sg),1)
-        x = self.bn5(x)
-        x = self.fc6(x)
-        x = self.bn6(x)
+        feat = torch.cat((mu,sg),1)
+        
+        embed = self.bn5(feat)
+        embed = self.fc6(embed)
+        embed = self.bn6(embed)
 
-        return x
+        return embed
     
         
     

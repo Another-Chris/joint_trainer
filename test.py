@@ -1,70 +1,39 @@
-import torch
-from utils import Config
-from loader import JointLoader
-import numpy as np
-from scipy.io import wavfile
-SOURCE_LIST = './data/voxceleb_train.txt'
-SOURCE_PATH = './data/voxceleb2/'
-TARGET_PATH = './data/cnceleb/data/'
-TARGET_LIST = './data/cnceleb_train_gt5.txt'
+from models.ResNet34_DSBN import ResNet34_DSBN
+import torch 
+import re
 
-ds = JointLoader(
-    source_list=SOURCE_LIST,
-    source_path=SOURCE_PATH,
-    target_list=TARGET_LIST,
-    target_path=TARGET_PATH,
-    augment=True,
-    musan_path=Config.MUSAN_PATH,
-    rir_path=Config.RIR_PATH,
-    max_frames=Config.MAX_FRAMES
-)
-loader = torch.utils.data.DataLoader(
-    ds,
-    batch_size=Config.BATCH_SIZE,
-    shuffle=True,
-    num_workers=1,
-    drop_last=True,
-)
+model = ResNet34_DSBN(nOut = 512, encoder_type = 'ASP').to('cpu')
 
-
-def get_pair(data):
-    anchor_len = np.random.randint(1, 5)
-    if anchor_len == 4: 
-        pos_len = 1
-    else:
-        pos_len = np.random.randint(1, 5-anchor_len)
+state_dict = torch.load('./pre_trained/resnet34.model', map_location='cpu')
+new_dict = {}
+for key, val in state_dict.items():
+    
+    if 'softmax' in key or 'angleproto' in key:
+        continue
+    
+    if '__S__' in key:
+        key = key.replace("__S__.", '')
+    if '__L__' in key: 
+        key = key.replace('__L__.', '')
         
-    anchor = []
-    pos = []
-    for i in range(5):
-        
-        if len(anchor) == anchor_len and len(pos) == pos_len: break
-        
-        d = data[:, i, :]
-        
-        if len(anchor) == anchor_len:
-            pos.append(d)
-        elif len(pos) == pos_len:
-            anchor.append(d)
+    if 'bn' in key:
+        bn = re.findall(r'(bn\d+)', key)
+        if bn:
+            bn = bn[0]
+            new_dict[key.replace(bn, f'{bn}.bn_source')] = val
+            new_dict[key.replace(bn, f'{bn}.bn_target')] = val
         else:
-            if np.random.random() < 0.5:
-                anchor.append(d)
-            else:
-                pos.append(d)
+            new_dict[key.replace('bn_last', f'bn_last.bn_source')] = val
+            new_dict[key.replace('bn_last', f'bn_last.bn_target')] = val
+    elif 'downsample.1' in key:
+            new_dict[key.replace('downsample.1', f'downsample.1.bn_source')] = val
+            new_dict[key.replace('downsample.1', f'downsample.1.bn_target')] = val
+    elif 'attention.2' in key:
+            new_dict[key.replace('attention.2', f'attention.2.bn_source')] = val
+            new_dict[key.replace('attention.2', f'attention.2.bn_target')] = val
+    else:
+        new_dict[key] = val
     
-    
-    anchor = np.concatenate(anchor, axis = 1)
-    pos = np.concatenate(pos, axis = 1)
-    return anchor, pos
-    
-
-if __name__ == '__main__':
-    for data, label in loader:
-        target = data['target_data']
-        anchor, pos = get_pair(target)
-        print(anchor.shape, pos.shape)
         
-        wavfile.write('anchor.wav', 16000, anchor[0])
-        wavfile.write('pos.wav', 16000, pos[0])
-
-        break
+torch.save(new_dict, './pre_trained/resnet34_DSBN.model')
+model.load_state_dict(new_dict)

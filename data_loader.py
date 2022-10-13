@@ -123,8 +123,7 @@ class AugmentWAV(object):
         self.rir_files = glob.glob(os.path.join(rir_path, '*/*/*.wav'))
 
     # noisecat: noise category: noise, speech, music
-    def additive_noise(self, noisecat, audio, max_audio=None, max_frames=None):
-
+    def additive_noise(self, noisecat, audio, max_audio=None, max_frames=None):        
         if max_audio is None:
             if max_frames is None:
                 max_audio = self.max_frames * 160 + 240
@@ -244,13 +243,12 @@ class DsLoader(torch.utils.data.Dataset):
         
         
         tidx = np.random.randint(0, len(self.target_data))
-        
-        target_data = []
-        for seg in load_segments(self.target_data[tidx]):
-            aug = self.augment_audio(seg, 100)
-            target_data.append(aug)
-        target_data = torch.FloatTensor(np.concatenate(target_data, axis = 0))
-        
+        max_audio = 5 * (100 * 160 + 240)
+        target_audio = load_wav(self.target_data[tidx], max_audio = max_audio)
+        target_data = {
+            'anchor': torch.FloatTensor(self.augment_audio(target_audio, max_audio=max_audio)),
+            'pos': torch.FloatTensor(self.augment_audio(target_audio, max_audio=max_audio))
+        }
         target_label = self.target_label[tidx]
 
         return {

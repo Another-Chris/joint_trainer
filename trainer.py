@@ -41,8 +41,9 @@ class Workers(nn.Module):
         spk_loss = self.aamsoftmax(source_feat, label['source_label'].to(Config.DEVICE))
         
         """target domain"""     
-        # target_data = data['target_data']
-        target_anchor, target_pos = get_pair(data['target_data'])
+        target_data = data['target_data']
+        target_anchor, target_pos = target_data ['anchor'], target_data['pos']
+        
         target_anchor = F.normalize(self.encoder(target_anchor.to(Config.DEVICE), domain = 'target', aug = True))
         target_pos = F.normalize(self.encoder(target_pos.to(Config.DEVICE), domain = 'target', aug = True))
         

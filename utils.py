@@ -34,34 +34,36 @@ class Config():
     # TEST_LIST = "./data/voxceleb_test.txt"
     DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
     
-def get_pair(data):
+def get_pair(anchor, pos):
+    
+    hoplen = 100 * 160 + 240
+    
     anchor_len = np.random.randint(1, 5)
     if anchor_len == 4: 
         pos_len = 1
     else:
         pos_len = np.random.randint(1, 5-anchor_len)
         
-    anchor = []
-    pos = []
+    anchor_segs = []
+    pos_segs = []
     for i in range(5):
         
-        if len(anchor) == anchor_len and len(pos) == pos_len: break
+        anchor_seg = anchor[:, i*hoplen:(i+1)*hoplen]
+        pos_seg = pos[:, i*hoplen:(i+1)*hoplen]
+        if len(anchor_segs) == anchor_len and len(pos_segs) == pos_len: break
         
-        d = data[:, i, :]
-        
-        if len(anchor) == anchor_len:
-            pos.append(d)
-        elif len(pos) == pos_len:
-            anchor.append(d)
+        if len(anchor_segs) == anchor_len:
+            pos.append(pos_seg)
+            
+        elif len(pos_segs) == pos_len:
+            anchor.append(anchor_seg)
         else:
             if np.random.random() < 0.5:
-                anchor.append(d)
+                anchor.append(anchor_seg)
             else:
-                pos.append(d)
+                pos.append(pos_seg)
     
-    anchor = torch.cat(anchor, dim = 1)
-    pos = torch.cat(pos, dim = 1)
-    return anchor, pos
+    return torch.cat(anchor, dim = 1),  torch.cat(pos, dim = 1)
 
 def plot_batch(batch):
     batch = batch.detach().cpu().numpy()

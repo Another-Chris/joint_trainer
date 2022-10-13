@@ -23,10 +23,10 @@ sys.path.append("..")
 TEST_LIST = Config.TEST_LIST
 TEST_PATH = Config.TEST_PATH
 MODEL_NAME = 'ECAPA_TDNN'
-PRE_TRAINED = './save/ECAPA_TDNN_DAT/model-22.model' # ~80 epochs
+PRE_TRAINED = './save/ECAPA_TDNN_DSBN_variable_length/model-10.model' # ~80 epochs
 # PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
 NUM_WORKERS = 1
-N_PROCESS = 3
+N_PROCESS = 2
 
 
 def tuneThresholdfromScore(scores, labels, target_fa, target_fr = None):
@@ -145,8 +145,8 @@ def evaluateFromList(encoder, test_list, test_path, num_eval=10):
     test_dataset = test_dataset_loader(
         setfiles,
         test_path,
-        num_eval=num_eval,
-        eval_frames=400
+        num_eval=Config.NUM_EVAL,
+        eval_frames=Config.EVAL_FRAMES
     )
 
     test_loader = torch.utils.data.DataLoader(
@@ -166,7 +166,7 @@ def evaluateFromList(encoder, test_list, test_path, num_eval=10):
         inp1 = data[0][0].cuda()
 
         with torch.no_grad():
-            ref_feat = encoder(inp1.unsqueeze(1))
+            ref_feat = encoder(inp1.unsqueeze(1), 'target')
             if type(ref_feat) == tuple:
                 ref_feat = ref_feat[1]
                 
@@ -218,6 +218,6 @@ if __name__ == '__main__':
         trainer.model.load_state_dict(torch.load(PRE_TRAINED))
         print('pre-trained weight loaded!')
     
-    eer, mindcf = evaluate(trainer.speaker_predictor)
+    eer, mindcf = evaluate(trainer.model)
     print(f'eer = {eer:.4f}, mindcf = {mindcf:.4f}')
     

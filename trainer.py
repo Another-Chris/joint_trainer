@@ -1,7 +1,7 @@
 from models import ECAPA_TDNN_WITH_DSBN
 from tqdm import tqdm
 from loss import SupCon, AAMsoftmax
-from utils import Config, get_pair
+from utils import Config
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime as dt
 
@@ -13,6 +13,44 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 sys.path.append('..')
+
+def get_pair(data):
+    
+    anchor, pos = data['anchor'], data['pos']
+    
+    if len(anchor.shape) > 2:
+        anchor = torch.squeeze(anchor, dim = 1)
+        pos = torch.squeeze(pos, dim = 1)
+    
+    hoplen = 100 * 160 + 240
+    
+    anchor_len = np.random.randint(1, 5)
+    if anchor_len == 4:
+        pos_len = 1
+    else:
+        pos_len = np.random.randint(1, 5 - anchor_len)
+        
+    anchor_segs = []
+    pos_segs = []
+    for i in range(5):
+        anchor_seg = anchor[:, i*hoplen:(i+1)*hoplen]
+        pos_seg = pos[:, i*hoplen:(i+1)*hoplen]
+        
+        if len(anchor_segs) == anchor_len and len(pos_segs) == pos_len: break
+        
+        if len(anchor_segs) >= anchor_len:
+            pos_segs.append(pos_seg)    
+        
+        elif len(pos_segs) >= pos_len:
+            anchor_segs.append(anchor_seg)
+        
+        else:
+            if np.random.random() < 0.5:
+                anchor_segs.append(anchor_seg)
+            else:
+                pos_segs.append(pos_seg)
+    
+    return torch.cat(anchor_segs, dim = 1),  torch.cat(pos_segs, dim = 1)
 
     
 class Workers(nn.Module):
@@ -37,15 +75,14 @@ class Workers(nn.Module):
         """source domain""" 
         # source_data = torch.cat([data['source_data']['anchor'], data['source_data']['pos']], dim = 0)
         source_data = data['source_data']
-        source_feat = self.encoder(source_data.to(Config.DEVICE), 'source', aug = True)       
+        source_feat = self.encoder(source_data.to(Config.DEVICE), 'source')       
         spk_loss = self.aamsoftmax(source_feat, label['source_label'].to(Config.DEVICE))
         
         """target domain"""     
-        target_data = data['target_data']
-        target_anchor, target_pos = target_data ['anchor'], target_data['pos']
-        
-        target_anchor = F.normalize(self.encoder(target_anchor.to(Config.DEVICE), domain = 'target', aug = True))
-        target_pos = F.normalize(self.encoder(target_pos.to(Config.DEVICE), domain = 'target', aug = True))
+        # target_data = data['target_data']
+        target_anchor, target_pos = get_pair(data['target_data'])
+        target_anchor = F.normalize(self.encoder(target_anchor.to(Config.DEVICE), domain = 'target'))
+        target_pos = F.normalize(self.encoder(target_pos.to(Config.DEVICE), domain = 'target'))
         
         # target_anchor = F.normalize(self.target_head(F.normalize(target_anchor)))
         # target_pos = F.normalize(self.target_head(F.normalize(target_pos)))

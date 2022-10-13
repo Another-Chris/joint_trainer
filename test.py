@@ -37,3 +37,4 @@ for key, val in state_dict.items():
         
 torch.save(new_dict, './pre_trained/resnet34_DSBN.model')
 model.load_state_dict(new_dict)
+ 

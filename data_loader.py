@@ -36,7 +36,7 @@ def split_given_size(a, size):
     return np.split(a, np.arange(size, len(a), size))
 
 
-def load_wav(filename, max_frames=None, max_audio=None, evalmode=True, num_eval=10):
+def load_wav(filename, max_frames=None, max_audio=None, evalmode=False, num_eval=10):
 
     if max_audio is None and max_frames is None:
         raise ValueError('please specify either max_frames or max_audio')

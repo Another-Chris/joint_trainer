@@ -19,11 +19,13 @@ class Config():
     GIM_SEGS = 3
     MAX_EPOCH = 300
     TEST_INTERVAL = 10
-    NUM_WORKERS = 1
-    BATCH_SIZE = 32
+    NUM_WORKERS = 6
+    BATCH_SIZE = 128
     NUM_CLASSES = 5994
     MAX_FRAMES = 200
-    LEARNING_RATE = 1e-4
+    EVAL_FRAMES = 400
+    NUM_EVAL = 10
+    LEARNING_RATE = 2e-4
     EMBED_SIZE = 192
     C = 1024
     MUSAN_PATH = "./data/musan_split"

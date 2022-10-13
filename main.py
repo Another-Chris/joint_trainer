@@ -10,13 +10,13 @@ import multiprocessing
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_DSBN"
-EXP_NAME = 'test'
+EXP_NAME = f"{MODEL_NAME}_DSBN_variable_length"
+# EXP_NAME = 'test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
 TARGET_PATH = './data/cnceleb/data/'
-TARGET_LIST = './data/cnceleb_train_gt5.txt'
+TARGET_LIST = './data/cnceleb_train_concat.txt'
 # PRE_TRAINED = f"./save/{MODEL_NAME}_SSL_enlargeDs/model-20.model"
 PRE_TRAINED = './pre_trained/ECAPA_TDNN_BN.model'
 # PRE_TRAINED = None
@@ -63,7 +63,6 @@ if __name__ == "__main__":
             desc += f" {key} = {val :.4f}"
 
         lr = trainer.scheduler.get_last_lr()[0]
-        # lr = trainer.model.get_lr()
         desc += f' lr = {lr :8f}'
 
         print(desc)
@@ -72,7 +71,6 @@ if __name__ == "__main__":
                    f'{MODEL_SAVE_PATH}/model-{it}.model')
 
         if lr > 1e-7:
-            # trainer.model.step_sch()
             trainer.scheduler.step()
 
         if it % Config.TEST_INTERVAL == 0:

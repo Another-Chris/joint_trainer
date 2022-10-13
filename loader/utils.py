@@ -1,19 +1,44 @@
-import random 
+import random
 
 import numpy as np
-import soundfile as sf 
+import soundfile as sf
 
 from audiomentations import AddGaussianNoise,  PitchShift, Shift, BandStopFilter
 
 
+def load_segments(fpath, augment):
+    max_audio = 100 * 160 + 240
+    source_wav, _ = sf.read(fpath)
+    
+    anchor = augment(source_wav, max_audio = len(source_wav))
+    pos = augment(source_wav, max_audio = len(source_wav))
 
+    segs = [s for s in split_given_size(
+        source_wav, max_audio) if len(s) == max_audio]
+    idx = np.random.choice(range(len(segs)), size=(5,), replace=False)
+
+    choice = []
+    for i, seg in enumerate(segs):
+        if i in idx:
+            choice.append(np.expand_dims(seg, 0))
+    return choice
+
+
+def split_given_size(a, size):
+    return np.split(a, np.arange(size, len(a), size))
 
 
 def worker_init_fn(worker_id): np.random.seed(
     np.random.get_state()[1][0] + worker_id)
 
-def load_wav(filename, max_frames, evalmode=True, num_eval=10):
-    max_audio = max_frames * 160 + 240
+
+def load_wav(filename, max_frames = None, max_audio=None, evalmode=True, num_eval=10):
+    
+    if max_audio is None and max_frames is None: 
+        raise ValueError('please specify either max_frames or max_audio')
+
+    if max_audio is None:
+        max_audio = max_frames * 160 + 240
 
     audio, _ = sf.read(filename)
     audiosize = audio.shape[0]
@@ -34,11 +59,8 @@ def load_wav(filename, max_frames, evalmode=True, num_eval=10):
 
     # actually take the segment
     feats = []
-    if evalmode and max_frames == 0:
-        feats.append(audio)
-    else:
-        for asf in startframe:
-            feats.append(audio[int(asf):int(asf) + max_audio])
+    for asf in startframe:
+        feats.append(audio[int(asf):int(asf) + max_audio])
 
     feat = np.stack(feats, axis=0).astype(np.float)
 
@@ -49,18 +71,17 @@ def transform(signal):
     sr = 16000
     signal = signal.astype(np.float32)
     t0 = AddGaussianNoise(min_amplitude=0.01, max_amplitude=0.03, p=1)
-    t1 = BandStopFilter(p = 1)
+    t1 = BandStopFilter(p=1)
     t2 = PitchShift(min_semitones=-2, max_semitones=1, p=1)
     t3 = Shift(min_fraction=-0.5, max_fraction=0.5, p=1)
-    
-    aug_type = np.random.randint(0,4)
-    if aug_type == 0:
-        signal = t0(signal, sample_rate = sr)
-    if aug_type == 1:
-        signal = t1(signal, sample_rate = sr)
-    if aug_type == 2:
-        signal = t2(signal, sample_rate = sr)
-    if aug_type == 3:
-        signal = t3(signal, sample_rate = sr)
-    return signal, aug_type
 
+    aug_type = np.random.randint(0, 4)
+    if aug_type == 0:
+        signal = t0(signal, sample_rate=sr)
+    if aug_type == 1:
+        signal = t1(signal, sample_rate=sr)
+    if aug_type == 2:
+        signal = t2(signal, sample_rate=sr)
+    if aug_type == 3:
+        signal = t3(signal, sample_rate=sr)
+    return signal, aug_type

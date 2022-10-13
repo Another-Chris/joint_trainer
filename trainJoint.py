@@ -10,15 +10,15 @@ import multiprocessing
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_joint_DSBN"
-# EXP_NAME = 'test'
+EXP_NAME = f"{MODEL_NAME}_DSBN"
+EXP_NAME = 'test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
 TARGET_PATH = './data/cnceleb/data/'
 TARGET_LIST = './data/cnceleb_train_gt5.txt'
 # PRE_TRAINED = f"./save/{MODEL_NAME}_SSL_enlargeDs/model-20.model"
-PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
+PRE_TRAINED = './pre_trained/ECAPA_TDNN_BN.model'
 # PRE_TRAINED = None
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)

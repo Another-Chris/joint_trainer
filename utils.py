@@ -11,6 +11,7 @@ import json
 import torch
 
 import matplotlib.pyplot as plt
+import numpy as np
 import librosa.display
 
 
@@ -18,7 +19,7 @@ class Config():
     GIM_SEGS = 3
     MAX_EPOCH = 300
     TEST_INTERVAL = 10
-    NUM_WORKERS = 6
+    NUM_WORKERS = 1
     BATCH_SIZE = 32
     NUM_CLASSES = 5994
     MAX_FRAMES = 200
@@ -32,6 +33,35 @@ class Config():
     # TEST_PATH = "./data/voxceleb1_test/"
     # TEST_LIST = "./data/voxceleb_test.txt"
     DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+    
+def get_pair(data):
+    anchor_len = np.random.randint(1, 5)
+    if anchor_len == 4: 
+        pos_len = 1
+    else:
+        pos_len = np.random.randint(1, 5-anchor_len)
+        
+    anchor = []
+    pos = []
+    for i in range(5):
+        
+        if len(anchor) == anchor_len and len(pos) == pos_len: break
+        
+        d = data[:, i, :]
+        
+        if len(anchor) == anchor_len:
+            pos.append(d)
+        elif len(pos) == pos_len:
+            anchor.append(d)
+        else:
+            if np.random.random() < 0.5:
+                anchor.append(d)
+            else:
+                pos.append(d)
+    
+    anchor = torch.cat(anchor, dim = 1)
+    pos = torch.cat(pos, dim = 1)
+    return anchor, pos
 
 def plot_batch(batch):
     batch = batch.detach().cpu().numpy()

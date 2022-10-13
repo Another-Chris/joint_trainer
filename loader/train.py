@@ -1,4 +1,4 @@
-from .utils import load_wav, transform
+from .utils import load_wav, transform, load_segments
 from .augment import AugmentWAV
 from utils import Config
 
@@ -57,26 +57,24 @@ class DsLoader():
         self.max_frames = max_frames
         self.augment = augment
 
-    def augment_audio(self, audio, return_type=False):
+    def augment_audio(self, audio, max_frames = None, max_audio = None):
 
-        augtype = [0]
-        if np.random.random() < 0.8:
-            audio = self.augment_wav.reverberate(audio)
-            augtype.append(1)
-
-        randi = np.random.randint(0, 3)
+        randi = np.random.randint(0, 6)
+        
         if randi == 0:
-            audio = self.augment_wav.additive_noise('music', audio)
-            augtype.append(2)
+            audio = audio
         if randi == 1:
-            audio = self.augment_wav.additive_noise('speech', audio)
-            augtype.append(3)
+            audio = self.augment_wav.additive_noise('music', audio, max_frames = max_frames, max_audio = max_audio)
         if randi == 2:
-            audio = self.augment_wav.additive_noise('noise', audio)
-            augtype.append(4)
+            audio = self.augment_wav.additive_noise('speech', audio, max_frames = max_frames, max_audio = max_audio)
+        if randi == 3:
+            audio = self.augment_wav.additive_noise('noise', audio, max_frames = max_frames, max_audio = max_audio)
+        if randi == 4:
+            audio = self.augment_wav.reverberate(audio, max_frames = max_frames, max_audio = max_audio)
+        if randi == 5:
+            audio = self.augment_wav.additive_noise('speech', audio, max_frames = max_frames, max_audio = max_audio)
+            audio = self.augment_wav.additive_noise('music', audio, max_frames = max_frames, max_audio = max_audio)
 
-        if return_type:
-            return audio, sum(augtype)
         return audio
 
     def __len__(self):
@@ -129,10 +127,23 @@ class JointLoader(DsLoader):
         source_data = torch.FloatTensor(
             self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
         source_label = self.source_label[idx]        
+        # tidx = np.random.randint(0, len(self.target_data))
+        # target_data = torch.FloatTensor(
+        #     self.augment_audio(load_wav(self.target_data[tidx], self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
+        # target_label = self.target_label[tidx]
+        
+        
         tidx = np.random.randint(0, len(self.target_data))
-        target_data = torch.FloatTensor(
-            self.augment_audio(load_wav(self.target_data[tidx], self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
+        
+        target_data = []
+        for seg in load_segments(self.target_data[tidx]):
+            aug = self.augment_audio(seg, 100)
+            target_data.append(aug)
+        target_data = torch.FloatTensor(np.concatenate(target_data, axis = 0))
+        
         target_label = self.target_label[tidx]
+
+        
 
         return {
             'source_data': source_data,
@@ -175,11 +186,13 @@ class SimpleDataLoader(DsLoader):
         # diff_idx = np.random.randint(0, len(self.source_data))
         # while diff_idx == idx:
         #     diff_idx = np.random.randint(0, len(self.source_data))
+        
+        anchor = self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))
+        pos = self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))
 
         return {
-            'anchor': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))),
-            'pos': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=False))),
-            # 'diff': torch.FloatTensor(self.augment_audio(load_wav(self.source_data[diff_idx], self.max_frames, evalmode=False)))
+            'anchor': torch.FloatTensor(anchor),
+            'pos': torch.FloatTensor(pos),
         }, self.source_label[idx]
 
 

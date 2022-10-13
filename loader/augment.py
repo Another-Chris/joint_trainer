@@ -1,12 +1,13 @@
-import os 
-import glob 
+import os
+import glob
 import random
 
-import numpy as np 
+import numpy as np
 import soundfile as sf
 
 from scipy import signal as ss
 from .utils import load_wav
+
 
 class AugmentWAV(object):
     def __init__(self, musan_path, rir_path, max_frames):
@@ -34,7 +35,14 @@ class AugmentWAV(object):
         self.rir_files = glob.glob(os.path.join(rir_path, '*/*/*.wav'))
 
     # noisecat: noise category: noise, speech, music
-    def additive_noise(self, noisecat, audio):
+    def additive_noise(self, noisecat, audio, max_audio=None, max_frames=None):
+
+        if max_audio is None:
+            if max_frames is None:
+                max_audio = self.max_frames * 160 + 240
+            else:
+                max_audio = max_frames * 160 + 240
+
         clean_db = 10 * np.log10(np.mean(audio ** 2) + 1e-4)
 
         numnoise = self.numnoise[noisecat]
@@ -44,7 +52,7 @@ class AugmentWAV(object):
         noises = []
 
         for noise in noiselist:
-            noiseaudio = load_wav(noise, self.max_frames, evalmode=False)
+            noiseaudio = load_wav(noise, max_audio=max_audio, evalmode=False)
             noise_snr = random.uniform(
                 self.noisesnr[noisecat][0], self.noisesnr[noisecat][1])
             noise_db = 10 * np.log10(np.mean(noiseaudio[0] ** 2) + 1e-4)
@@ -53,10 +61,17 @@ class AugmentWAV(object):
 
         return np.sum(np.concatenate(noises, axis=0), axis=0, keepdims=True) + audio
 
-    def reverberate(self, audio):
+    def reverberate(self, audio, max_frames=None, max_audio=None):
+
+        if max_audio is None:
+            if max_frames is None:
+                max_audio = self.max_frames * 160 + 240
+            else:
+                max_audio = max_frames * 160 + 240
+
         rir_file = random.choice(self.rir_files)
         rir, _ = sf.read(rir_file)
         rir = np.expand_dims(rir.astype(np.float), 0)
         rir = rir / np.sqrt(np.sum(rir ** 2))
 
-        return ss.convolve(audio, rir, mode='full')[:, :self.max_audio]
+        return ss.convolve(audio, rir, mode='full')[:, :max_audio]

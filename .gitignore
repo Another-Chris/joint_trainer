@@ -1,6 +1,5 @@
 data
 .model
-logs
 .pt
 .txt
 save

@@ -1,10 +1,8 @@
 from glob import glob
 from tqdm import tqdm
-from loader import test_dataset_loader
-from joblib import Parallel, delayed
+from data_loader import test_dataset_loader
 from tuneThreshold import tuneThresholdfromScore, ComputeErrorRates, ComputeMinDcf
 from utils import Config
-from models import ECAPA_TDNN_WITH_FBANK
 from trainer import JointTrainer
 
 import torch.nn.functional as F

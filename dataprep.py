@@ -5,6 +5,10 @@ import os
 import hashlib
 import glob
 import multiprocessing
+import re 
+
+import numpy as np
+import soundfile as sf
 
 from zipfile import ZipFile
 from tqdm import tqdm
@@ -21,6 +25,7 @@ parser.add_argument('--download', dest = 'download', action = 'store_true', help
 parser.add_argument('--extract', dest = 'extract', action = 'store_true', help = 'enable extract')
 parser.add_argument('--convert', dest = 'convert', action = 'store_true', help = 'enalbe convert')
 parser.add_argument('--augment', dest = 'augment', action = 'store_true', help = 'download and extract augmentation files')
+parser.add_argument('--concat', dest = 'concat', action = 'store_true', help = 'build training list')
 parser.add_argument('--build_train_list', dest = 'build_train_list', action = 'store_true', help = 'build training list')
 
 args = parser.parse_args()
@@ -149,6 +154,59 @@ def split_musan(args):
 def build_train_list():
     files = glob.glob("./data/voxceleb2/*/*.wav")
     print(files)
+    
+    
+## ========== ==========
+## concat cnceleb
+## ========== ==========  
+def concat_cn():
+    tlen = (100 * 160 + 240) * 5
+    files = glob.glob('./data/cnceleb/data/*/*.flac')
+
+    dev_list = []
+    with open('./data/cnceleb/dev/dev.lst') as f:
+        for line in f:
+            dev_list.append(line.strip())
+
+    cat = np.array([])
+    curr_label = None
+    prev_label = None
+    l = []
+
+    print('removing concat files...')
+    for file in tqdm(files):
+        if 'concat' in file: os.unlink(file)
+
+    print('concat files...')
+    for i,file in enumerate(tqdm(files)):
+        
+        curr_label = re.findall(r'(id\d+)', file)[0]
+        if curr_label not in dev_list: continue
+        
+        audio, _ = sf.read(file)
+        
+        if curr_label != prev_label:
+            cat = np.array([])
+        
+        if len(audio) < tlen:
+            cat = np.concatenate([cat, audio])
+        else:
+            fpath = file.replace('./data/cnceleb/data/', '')
+            
+            l.append(f"{curr_label} {fpath}")
+        
+        if len(cat) >= tlen:
+            fname = f'./data/cnceleb/data/{curr_label}/{curr_label}-concat-{i}.flac'
+            wavfile.write(fname, rate = 16000, data = cat)
+            cat = np.array([])
+            
+            l.append(f"{curr_label} {curr_label}/{curr_label}-concat-{i}.flac")
+            
+        prev_label = curr_label
+
+    with open('./data/cnceleb_train_concat.txt', 'w') as f:
+        for line in l:
+            f.write(line + '\n')
 
 
 
@@ -193,6 +251,9 @@ if __name__ == '__main__':
 
     if args.build_train_list:
         build_train_list()
+        
+    if args.concat:
+        concat_cn()
 
     if args.convert:
         files = glob.glob('%s/voxceleb2/*/*/*.m4a'%args.save_path)

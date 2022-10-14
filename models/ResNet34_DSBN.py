@@ -21,63 +21,26 @@ class SEBasicBlock(nn.Module):
         self.stride = stride
 
     def forward(self, x):
+        domain = None
+        if type (x) == tuple:
+            x, domain = x
+        
         residual = x
 
         out = self.conv1(x)
         out = self.relu(out)
-        out = self.bn1(out)
+        out = self.bn1(out, domain)
 
         out = self.conv2(out)
-        out = self.bn2(out)
+        out = self.bn2(out, domain)
         out = self.se(out)
 
         if self.downsample is not None:
-            residual = self.downsample(x)
+            residual = self.downsample(x, domain)
 
         out += residual
         out = self.relu(out)
-        return out
-
-
-class SEBottleneck(nn.Module):
-    expansion = 4
-
-    def __init__(self, inplanes, planes, stride=1, downsample=None, reduction=8):
-        super(SEBottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.bn1 = DSBN2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
-        self.bn2 = DSBN2d(planes)
-        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
-        self.bn3 = DSBN2d(planes * 4)
-        self.relu = nn.ReLU(inplace=True)
-        self.se = SELayer(planes * 4, reduction)
-        self.downsample = downsample
-        self.stride = stride
-
-    def forward(self, x):
-        residual = x
-
-        out = self.conv1(x)
-        out = self.bn1(out)
-        out = self.relu(out)
-
-        out = self.conv2(out)
-        out = self.bn2(out)
-        out = self.relu(out)
-
-        out = self.conv3(out)
-        out = self.bn3(out)
-        out = self.se(out)
-
-        if self.downsample is not None:
-            residual = self.downsample(x)
-
-        out += residual
-        out = self.relu(out)
-
-        return out
+        return out, domain
 
 
 class SELayer(nn.Module):
@@ -99,26 +62,36 @@ class SELayer(nn.Module):
     
     
 
-# class Attention(nn.Module):
-#     def __init__(self, dim_in, dim_out) -> None:
-#         super().__init__()
+class Attention(nn.Module):
+    def __init__(self, dim_in, dim_out) -> None:
+        super().__init__()
 
-#         self.conv1 = nn.Conv1d(dim_in, 128, kernel_size=1)
-#         self.bn = DSBN1d(128)
-#         self.conv2 = nn.Conv1d(128, dim_out, kernel_size=1)
+        self.conv1 = nn.Conv1d(dim_in, 128, kernel_size=1)
+        self.bn = DSBN1d(128)
+        self.conv2 = nn.Conv1d(128, dim_out, kernel_size=1)
 
-#     def forward(self, x, domain):
-#         x = self.conv1(x)
-#         x = F.relu(x)
-#         x = self.bn(x, domain)
-#         x = torch.tanh(x)
-#         x = self.conv2(x)
-#         x = F.softmax(x, dim=2)
-#         return x
-
-
+    def forward(self, x, domain):
+        x = self.conv1(x)
+        x = F.relu(x)
+        x = self.bn(x, domain)
+        x = torch.tanh(x)
+        x = self.conv2(x)
+        x = F.softmax(x, dim=2)
+        return x
+    
+    
+class Downsample(nn.Module):
+    def __init__(self, dim_in, dim_out, stride):
+        super().__init__()
         
-
+        self.conv2d = nn.Conv2d(dim_in, dim_out, kernel_size=1, stride=stride, bias=False)
+        self.bn = DSBN2d(dim_out)
+        
+    def forward(self, x, domain):
+        x = self.conv2d(x)
+        x = self.bn(x, domain)
+        return x    
+    
 
 class ResNet34(nn.Module):
     def __init__(self, block, layers, num_filters, nOut, encoder_type='SAP', n_mels=64, log_input=True, **kwargs):
@@ -148,15 +121,8 @@ class ResNet34(nn.Module):
 
         outmap_size = int(self.n_mels/8)
 
-        # dim = num_filters[3] * outmap_size
-        # self.attention = Attention(dim, dim)
-        self.attention = nn.Sequential(
-            nn.Conv1d(num_filters[3] * outmap_size, 128, kernel_size=1),
-            nn.ReLU(),
-            DSBN1d(128),
-            nn.Conv1d(128, num_filters[3] * outmap_size, kernel_size=1),
-            nn.Softmax(dim=2),
-            )
+        dim = num_filters[3] * outmap_size
+        self.attention = Attention(dim, dim)
 
         if self.encoder_type == "SAP":
             out_dim = num_filters[3] * outmap_size
@@ -171,11 +137,7 @@ class ResNet34(nn.Module):
     def _make_layer(self, block, planes, blocks, stride=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
-                DSBN2d(planes * block.expansion),
-            )
+            downsample = Downsample(self.inplanes, planes * block.expansion, stride)
 
         layers = []
         layers.append(block(self.inplanes, planes, stride, downsample))
@@ -190,7 +152,7 @@ class ResNet34(nn.Module):
         nn.init.xavier_normal_(out)
         return out
 
-    def forward(self, x):
+    def forward(self, x, domain):
 
         with torch.no_grad():
             with torch.cuda.amp.autocast(enabled=False):
@@ -200,16 +162,19 @@ class ResNet34(nn.Module):
 
         x = self.conv1(x)
         x = self.relu(x)
-        x = self.bn1(x)
+        x = self.bn1(x, domain)
 
-        x = self.layer1(x)
+        x = self.layer1((x, domain))
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
+        if type(x) == tuple:
+            x = x[0]
+        
 
         x = x.reshape(x.size()[0],-1,x.size()[-1])
 
-        w = self.attention(x)
+        w = self.attention(x, domain)
 
         if self.encoder_type == "SAP":
             x = torch.sum(x * w, dim=2)
@@ -226,6 +191,7 @@ class ResNet34(nn.Module):
 
 def ResNet34_DSBN(nOut=256, **kwargs):
     # Number of filters
+    num_blocks = [3, 4, 6, 3]
     num_filters = [32, 64, 128, 256]
-    model = ResNet34(SEBasicBlock, [3, 4, 6, 3], num_filters, nOut, **kwargs)
+    model = ResNet34(SEBasicBlock, num_blocks, num_filters, nOut, **kwargs)
     return model

@@ -20,12 +20,12 @@ class Config():
     MAX_EPOCH = 300
     TEST_INTERVAL = 10
     NUM_WORKERS = 6
-    BATCH_SIZE = 128
+    BATCH_SIZE = 200
     NUM_CLASSES = 5994
     MAX_FRAMES = 200
     EVAL_FRAMES = 400
     NUM_EVAL = 10
-    LEARNING_RATE = 2e-4
+    LEARNING_RATE = 4e-4
     EMBED_SIZE = 192
     C = 1024
     MUSAN_PATH = "./data/musan_split"

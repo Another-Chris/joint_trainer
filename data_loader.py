@@ -14,28 +14,6 @@ import numpy as np
 
 
 """ functions """
-def load_segments(fpath, augment):
-    max_audio = 100 * 160 + 240
-    source_wav, _ = sf.read(fpath)
-
-    anchor = augment(source_wav, max_audio=len(source_wav))
-    pos = augment(source_wav, max_audio=len(source_wav))
-
-    segs = [s for s in split_given_size(
-        source_wav, max_audio) if len(s) == max_audio]
-    idx = np.random.choice(range(len(segs)), size=(5,), replace=False)
-
-    choice = []
-    for i, seg in enumerate(segs):
-        if i in idx:
-            choice.append(np.expand_dims(seg, 0))
-    return choice
-
-
-def split_given_size(a, size):
-    return np.split(a, np.arange(size, len(a), size))
-
-
 def load_wav(filename, max_frames=None, max_audio=None, evalmode=False, num_eval=10):
 
     if max_audio is None and max_frames is None:
@@ -214,8 +192,8 @@ class DsLoader(torch.utils.data.Dataset):
     
 
     def get_tuple(self, idx, data_list, label_list, eval_mode, num_eval=Config.GIM_SEGS):
-        anchor = self.augment_audio(load_wav(data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
-        pos = self.augment_audio(load_wav(data_list[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval))
+        anchor = self.augment_audio(load_wav(data_list[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval))
+        pos = self.augment_audio(load_wav(data_list[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval))
 
         anchor = torch.FloatTensor(anchor)
         pos = torch.FloatTensor(pos)
@@ -228,28 +206,27 @@ class DsLoader(torch.utils.data.Dataset):
         
         ## two segments
         # source_data, source_label = self.get_tuple(idx, self.source_data, self.source_label, eval_mode=False)
-        # tidx = np.random.randint(0, len(self.target_data))
-        # target_data, target_label = self.get_tuple(tidx, self.target_data, self.target_label, eval_mode=False)
+        tidx = np.random.randint(0, len(self.target_data))
+        target_data, target_label = self.get_tuple(tidx, self.target_data, self.target_label, eval_mode=False)
         
-
         ## one segment
         source_data = torch.FloatTensor(
-            self.augment_audio(load_wav(self.source_data[idx], self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
-        source_label = self.source_label[idx]        
+            self.augment_audio(load_wav(self.source_data[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
+        source_label = self.source_label[idx]
+        
         # tidx = np.random.randint(0, len(self.target_data))
         # target_data = torch.FloatTensor(
         #     self.augment_audio(load_wav(self.target_data[tidx], self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
         # target_label = self.target_label[tidx]
         
-        
-        tidx = np.random.randint(0, len(self.target_data))
-        max_audio = 5 * (100 * 160 + 240)
-        target_audio = load_wav(self.target_data[tidx], max_audio = max_audio)
-        target_data = {
-            'anchor': torch.FloatTensor(self.augment_audio(target_audio, max_audio=max_audio)),
-            'pos': torch.FloatTensor(self.augment_audio(target_audio, max_audio=max_audio))
-        }
-        target_label = self.target_label[tidx]
+        # tidx = np.random.randint(0, len(self.target_data))
+        # max_audio = 5 * (100 * 160 + 240)
+        # target_audio = load_wav(self.target_data[tidx], max_audio = max_audio)
+        # target_data = {
+        #     'anchor': torch.FloatTensor(self.augment_audio(target_audio, max_audio=max_audio)),
+        #     'pos': torch.FloatTensor(self.augment_audio(target_audio, max_audio=max_audio))
+        # }
+        # target_label = self.target_label[tidx]
 
         return {
             'source_data': source_data,

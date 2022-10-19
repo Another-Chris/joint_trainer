@@ -4,22 +4,35 @@ from pathlib import Path
 from utils import Config, inf_train_gen
 from eval import evaluate
 
+import numpy as np
+
 import torch
 import torch.cuda
 import multiprocessing
+import random
+
+torch.manual_seed(0)
+np.random.seed(0)
+random.seed(0)
+
 torch.cuda.empty_cache()
 
 MODEL_NAME = "ECAPA_TDNN"
-EXP_NAME = f"{MODEL_NAME}_DSBN_variable_length"
-# EXP_NAME = 'test'
+# MODEL_NAME = "ResNet34"
+
+EXP_NAME = f"{MODEL_NAME}_DSBN_newConcat"
+# EXP_NAME = f'{MODEL_NAME}_test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
+
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
-TARGET_PATH = './data/cnceleb/data/'
-TARGET_LIST = './data/cnceleb_train_concat.txt'
-# PRE_TRAINED = f"./save/{MODEL_NAME}_SSL_enlargeDs/model-20.model"
+TARGET_PATH = './data/cnceleb_wav/data/'
+TARGET_LIST = './data/cnceleb_train_wav.txt'
+
+# PRE_TRAINED = './save/ECAPA_TDNN_fineTune_aamsoftmax/model-10.model'
 PRE_TRAINED = './pre_trained/ECAPA_TDNN_BN.model'
-# PRE_TRAINED = None
+# PRE_TRAINED = './pre_trained/resnet34_DSBN.model'
+# PRE_TRAINED = None 
 
 Path(MODEL_SAVE_PATH).mkdir(parents=True, exist_ok=True)
 
@@ -47,7 +60,7 @@ if __name__ == "__main__":
     ds_gen = inf_train_gen(loader)
     trainer = Trainer(exp_name=EXP_NAME)
 
-    if PRE_TRAINED is not None:
+    if PRE_TRAINED is not None:        
         trainer.model.encoder.load_state_dict(torch.load(PRE_TRAINED))
         print('pre-trained weight loaded!')
 

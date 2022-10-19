@@ -1,6 +1,7 @@
-from models import ECAPA_TDNN_WITH_DSBN
+from models.ECAPA_TDNN_WITH_DSBN import ECAPA_TDNN_WITH_DSBN
+from models.ResNet34_DSBN import ResNet34_DSBN 
 from tqdm import tqdm
-from loss import SupCon, AAMsoftmax
+from loss import SupCon, AAMsoftmax, AngleProto
 from utils import Config
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime as dt
@@ -14,6 +15,9 @@ import torch.optim as optim
 import numpy as np
 sys.path.append('..')
 
+scaler = torch.cuda.amp.GradScaler()
+
+
 def get_pair(data):
     
     anchor, pos = data['anchor'], data['pos']
@@ -23,13 +27,13 @@ def get_pair(data):
         pos = torch.squeeze(pos, dim = 1)
     
     hoplen = 100 * 160 + 240
+    min_hop = 2
+    anchor_len = np.random.randint(min_hop, 4)
+    pos_len = np.random.randint(min_hop, 6 - anchor_len)
     
-    anchor_len = np.random.randint(1, 5)
-    if anchor_len == 4:
-        pos_len = 1
-    else:
-        pos_len = np.random.randint(1, 5 - anchor_len)
-        
+    # anchor_len = 2
+    # pos_len = 2
+
     anchor_segs = []
     pos_segs = []
     for i in range(5):
@@ -40,17 +44,16 @@ def get_pair(data):
         
         if len(anchor_segs) >= anchor_len:
             pos_segs.append(pos_seg)    
-        
-        elif len(pos_segs) >= pos_len:
-            anchor_segs.append(anchor_seg)
-        
         else:
-            if np.random.random() < 0.5:
-                anchor_segs.append(anchor_seg)
-            else:
-                pos_segs.append(pos_seg)
+            anchor_segs.append(anchor_seg)
     
-    return torch.cat(anchor_segs, dim = 1),  torch.cat(pos_segs, dim = 1)
+    anchor = torch.cat(anchor_segs, dim = 1)
+    pos =  torch.cat(pos_segs, dim = 1)
+    
+    if anchor.shape[1] < min_hop * hoplen or pos.shape[1] < min_hop * hoplen:
+        raise ValueError('anchor or pos < min_hop in data loader')
+    
+    return anchor, pos 
 
     
 class Workers(nn.Module):
@@ -59,6 +62,7 @@ class Workers(nn.Module):
 
         self.encoder = encoder
         self.supcon = SupCon()
+        # self.angleproto = AngleProto()
         self.aamsoftmax = AAMsoftmax(m = 0.2, s = 30, n_class = Config.NUM_CLASSES, n_embed = embed_size)
     
     def forward(self, x, domain):
@@ -71,24 +75,24 @@ class Workers(nn.Module):
         
     def start_train(self, ds_gen):
         data, label = next(ds_gen)
-                
+        
         """source domain""" 
         # source_data = torch.cat([data['source_data']['anchor'], data['source_data']['pos']], dim = 0)
         source_data = data['source_data']
-        source_feat = self.encoder(source_data.to(Config.DEVICE), 'source')       
+        source_feat = self.encoder(source_data.to(Config.DEVICE), 'target')       
         spk_loss = self.aamsoftmax(source_feat, label['source_label'].to(Config.DEVICE))
-        
+
         """target domain"""     
         # target_data = data['target_data']
-        target_anchor, target_pos = get_pair(data['target_data'])
+        # spk_feat = self.encoder(target_data.to(Config.DEVICE), domain = 'empty', aug = True)
+        # spk_loss = self.aamsoftmax(spk_feat, label['target_label'].to(Config.DEVICE))
+        
+        target_anchor, target_pos = data['target_data']['anchor'],data['target_data']['pos']
         target_anchor = F.normalize(self.encoder(target_anchor.to(Config.DEVICE), domain = 'target'))
         target_pos = F.normalize(self.encoder(target_pos.to(Config.DEVICE), domain = 'target'))
-        
-        # target_anchor = F.normalize(self.target_head(F.normalize(target_anchor)))
-        # target_pos = F.normalize(self.target_head(F.normalize(target_pos)))
-        
+
         simCLR = self.forward_simCLR(target_anchor,target_pos)
-        
+    
         return {
             'spk_loss': spk_loss,
             'simCLR': simCLR
@@ -102,9 +106,12 @@ class Trainer(torch.nn.Module):
         self.writer = SummaryWriter(
             log_dir=f"./logs/{exp_name}/{dt.now().strftime('%Y-%m-%d %H.%M.%S')}")
 
-        self.encoder = ECAPA_TDNN_WITH_DSBN(
-            C=Config.C, embed_size=Config.EMBED_SIZE)
+        # self.encoder = ResNet34_DSBN(nOut = 512, encoder_type = 'ASP')
+        # self.model = Workers(self.encoder, embed_size=512)
+        
+        self.encoder = ECAPA_TDNN_WITH_DSBN(C=Config.C, embed_size=Config.EMBED_SIZE)
         self.model = Workers(self.encoder, embed_size=Config.EMBED_SIZE)
+        
         self.model.to(Config.DEVICE)
 
         self.optim = optim.Adam(self.model.parameters(), lr = Config.LEARNING_RATE)
@@ -123,10 +130,13 @@ class Trainer(torch.nn.Module):
             
             losses = self.model.start_train(ds_gen)
             loss = torch.sum(torch.stack(list(losses.values())))
-            
+
             self.optim.zero_grad()
             loss.backward()
             self.optim.step()
+            # scaler.scale(loss).backward()
+            # scaler.step(self.optim)
+            # scaler.update()
 
             desc = f""
             for key, val in losses.items():

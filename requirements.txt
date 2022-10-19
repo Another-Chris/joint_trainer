@@ -1,5 +1,3 @@
-torch
-torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/cu116
 asteroid-filterbanks
 numpy
 scipy
@@ -12,4 +10,3 @@ pandas
 matplotlib
 seaborn
 librosa
-libsndfile

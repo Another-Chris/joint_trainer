@@ -23,7 +23,7 @@ sys.path.append("..")
 TEST_LIST = Config.TEST_LIST
 TEST_PATH = Config.TEST_PATH
 MODEL_NAME = 'ECAPA_TDNN'
-PRE_TRAINED = './save/ECAPA_TDNN_DSBN_variable_length/model-10.model' # ~80 epochs
+PRE_TRAINED = './save/ECAPA_TDNN_DSBN_simCLR/model-40.model'
 # PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
 NUM_WORKERS = 1
 N_PROCESS = 2
@@ -85,8 +85,6 @@ def ComputeMinDcf(fnrs, fprs, thresholds, p_target, c_miss, c_fa):
     c_def = min(c_miss * p_target, c_fa * (1 - p_target))
     min_dcf = min_c_det / c_def
     return min_dcf, min_c_det_threshold
-
-
 
 
 def compute_one_score(lines, feats, num_eval, position):
@@ -169,8 +167,12 @@ def evaluateFromList(encoder, test_list, test_path, num_eval=10):
             ref_feat = encoder(inp1.unsqueeze(1), 'target')
             if type(ref_feat) == tuple:
                 ref_feat = ref_feat[1]
-                
+            if torch.isnan(torch.mean(ref_feat)):
+                raise ValueError('feat NaN')
+
         feats[data[1][0]] = ref_feat.detach().cpu()
+        
+        
 
     ########## compute the scores ##########
     items_per_p = len(lines) // N_PROCESS + 1
@@ -194,6 +196,8 @@ def evaluateFromList(encoder, test_list, test_path, num_eval=10):
     all_labels = df['all_labels'].values
     all_trails = df['all_trails'].values
     
+    df.to_csv('./scores.csv', index = False)
+    
     return (all_scores, all_labels, all_trails)
 
 
@@ -215,9 +219,8 @@ if __name__ == '__main__':
     trainer = Trainer(exp_name='eval')
     
     if PRE_TRAINED is not None:
-        trainer.model.load_state_dict(torch.load(PRE_TRAINED))
+        trainer.model.load_state_dict(torch.load(PRE_TRAINED), strict = False)
         print('pre-trained weight loaded!')
-    
     eer, mindcf = evaluate(trainer.model)
     print(f'eer = {eer:.4f}, mindcf = {mindcf:.4f}')
     

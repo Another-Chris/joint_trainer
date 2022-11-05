@@ -2,6 +2,7 @@ from pathlib import PurePath
 from pydub import AudioSegment
 from tqdm import tqdm
 from scipy.io import wavfile
+from collections import defaultdict
 
 import glob
 import multiprocessing
@@ -14,6 +15,7 @@ import shutil
 
 import numpy as np
 import soundfile as sf
+
 
 parser = argparse.ArgumentParser(description = "CN-Celeb data handler")
 parser.add_argument('--convert', action = 'store_true', dest = 'convert', help = 'convert flac to wav')
@@ -42,14 +44,14 @@ def convert_files(files):
         os.unlink(file)
         
 
-def concat_cn(files, tlen):
+def concat_cn(files, trange, target_path):
     cat = np.array([])
-    curr_label = None
     prev_label = None
-    prev_path = None
-
+    prev_genre = None
+    cat_dict = defaultdict(list)
+    
     print('concat files...')
-    for i,file in enumerate(tqdm(files)):
+    for i, file in enumerate(tqdm(files)):
         
         if 'concat' in file: 
             os.unlink(file)
@@ -60,19 +62,32 @@ def concat_cn(files, tlen):
         
         audio, _ = sf.read(file)
         curr_path = PurePath(file)
+        curr_genre = curr_path.name.split('-')[0]            
         
-        if curr_label != prev_label:
-            cat = np.array([])
-        
-        if len(audio) < tlen:
-            cat = np.concatenate([cat, audio])
-            if len(cat) >= tlen:
-                fname = f'{os.path.split(curr_path)[0]}/{curr_label}-concat-{i}{curr_path.suffix}'
-                wavfile.write(fname, rate = 16000, data = cat)
-                cat = np.array([])
+        if trange[0] < len(audio) < trange[1]:
+            if curr_label == prev_label and curr_genre == prev_genre:
+                cat = np.concatenate([cat, audio])
+                if len(cat) >= trange[1]:
+                    fname = f'{target_path}/{curr_label}/{curr_genre}-concat-{i}.wav'
+                    wavfile.write(fname, rate = 16000, data = cat)
+                    cat_dict[(curr_label, curr_genre)].append(fname)
+                    cat = np.array([])
+            else:
+                if len(cat) > 0:
+                    prev_cat_name = cat_dict[(prev_label, prev_genre)]
+                    if prev_cat_name:
+                        prev_cat_name = prev_cat_name[-1]
+                        prev_cat, _ = sf.read(prev_cat_name)
+                        wavfile.write(prev_cat_name, rate = 16000, data = np.concatenate([prev_cat, cat]))
+                    else:
+                        print(prev_label, prev_genre)
+                    cat = np.array([])
+                cat = np.concatenate([cat, audio])
                         
         prev_label = curr_label
-        prev_path = curr_path
+        prev_genre = curr_genre
+    return cat_dict
+
 
 
 def vad_files(files):

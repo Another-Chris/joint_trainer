@@ -5,6 +5,8 @@ from utils import Config
 from trainer import Trainer
 from sklearn import metrics
 from operator import itemgetter
+from data_loader import load_wav
+from argparse import ArgumentParser
 
 import torch.nn.functional as F
 import numpy as np
@@ -17,16 +19,22 @@ import sys
 import multiprocessing
 import os
 import glob
+import re
 
 sys.path.append("..")
 
 TEST_LIST = Config.TEST_LIST
 TEST_PATH = Config.TEST_PATH
 MODEL_NAME = 'ECAPA_TDNN'
-PRE_TRAINED = './save/ECAPA_TDNN_DSBN_simCLR/model-40.model'
+PRE_TRAINED = './save/ECAPA_TDNN_DSBN.model'
 # PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
 NUM_WORKERS = 1
 N_PROCESS = 2
+
+parser = ArgumentParser()
+parser.add_argument('--cohorts', action = 'store_true', dest = 'cohorts')
+parser.add_argument('--eval', action = 'store_true', dest = 'eval')
+args = parser.parse_args()
 
 
 def tuneThresholdfromScore(scores, labels, target_fa, target_fr = None):
@@ -87,7 +95,34 @@ def ComputeMinDcf(fnrs, fprs, thresholds, p_target, c_miss, c_fa):
     return min_dcf, min_c_det_threshold
 
 
-def compute_one_score(lines, feats, num_eval, position):
+def score_normalization(ref, com, cohorts, top=-1):
+    """
+    Adaptive symmetric score normalization using cohorts from eval data
+    """
+    def ZT_norm(ref, com, top=-1):
+        """
+        Perform Z-norm or T-norm depending on input order
+        """
+        S = np.mean(np.inner(cohorts, ref), axis=1)
+        S = np.sort(S, axis=0)[::-1][:top]
+        mean_S = np.mean(S)
+        std_S = np.std(S)
+        score = np.inner(ref, com)
+        score = np.mean(score)
+        return (score - mean_S) / std_S
+
+    def S_norm(ref, com, top=-1):
+        """
+        Perform S-norm
+        """
+        return (ZT_norm(ref, com, top=top) + ZT_norm(com, ref, top=top)) / 2
+
+    ref = ref.cpu().numpy()
+    com = com.cpu().numpy()
+    return S_norm(ref, com, top=top)
+
+
+def compute_one_score(lines, feats, num_eval, position, cohorts_path = None):
     
     all_scores = []
     all_labels = []
@@ -107,11 +142,15 @@ def compute_one_score(lines, feats, num_eval, position):
         ref_feat = F.normalize(ref_feat, p=2, dim=1)
         com_feat = F.normalize(com_feat, p=2, dim=1)
 
-        # euclidean dis
-        dist = torch.cdist(ref_feat.reshape(
-            num_eval, -1), com_feat.reshape(num_eval, -1)).cpu().numpy()
+        # calculate scores
+        if cohorts_path is None:
+            dist = F.pairwise_distance(ref_feat.reshape(
+                num_eval, -1), com_feat.reshape(num_eval, -1)).cpu().numpy()
+            score = -1 * np.mean(dist)
+        else:
+            cohorts = np.load(cohorts_path)
+            score = score_normalization(ref_feat, com_feat,cohorts,top = 200)
 
-        score = -1 * np.mean(dist)
 
         all_scores.append(score)
         all_labels.append(int(data[0]))
@@ -119,6 +158,42 @@ def compute_one_score(lines, feats, num_eval, position):
         
     df = pd.DataFrame({'all_scores': all_scores, 'all_labels': all_labels, 'all_trails': all_trails})
     df.to_csv(f'./{position}.csv', index = False)
+
+def produce_cohorts(model):
+    used_speakers = []
+    files = []
+    feats = []
+    
+    with open(TEST_LIST) as f:
+        for line in tqdm(f):
+            if (not line):
+                break
+            data = line.split()
+
+            data_1_class = re.findall(r'(id\d+)', data[1])[0]
+            data_2_class = re.findall(r'(id\d+)', data[2])[0]
+
+            if data_1_class not in used_speakers:
+                used_speakers.append(data_1_class)
+                files.append(data[1])
+            if data_2_class not in used_speakers:
+                used_speakers.append(data_2_class)
+                files.append(data[2])
+                
+    setfiles = list(set(files))
+    setfiles.sort()
+    
+    model.eval()
+    for _, f in enumerate(tqdm(setfiles)):
+        inp1 = torch.FloatTensor(
+            load_wav('./data/cnceleb/eval/' + f, Config.EVAL_FRAMES, evalmode=True,
+                    num_eval=Config.NUM_EVAL)).to(Config.DEVICE)
+        
+        feat = model(inp1, domain = 'target')
+        feat = F.normalize(feat, p=2, dim=1).detach().cpu().numpy().squeeze()
+        feats.append(feat)
+
+        np.save('./cohorts.npy', np.array(feats))
 
 
 def evaluateFromList(encoder, test_list, test_path, num_eval=10):
@@ -179,7 +254,7 @@ def evaluateFromList(encoder, test_list, test_path, num_eval=10):
     ps = []
     for n in range(N_PROCESS):
         line_seg = lines[n*items_per_p : (n+1) * items_per_p]
-        p = multiprocessing.Process(target = compute_one_score, args = (line_seg, feats, num_eval, n))
+        p = multiprocessing.Process(target = compute_one_score, args = (line_seg, feats, num_eval, n ))
         p.start()
         ps.append(p)
     for p in ps:
@@ -219,8 +294,13 @@ if __name__ == '__main__':
     trainer = Trainer(exp_name='eval')
     
     if PRE_TRAINED is not None:
-        trainer.model.load_state_dict(torch.load(PRE_TRAINED), strict = False)
+        trainer.model.load_state_dict(torch.load(PRE_TRAINED))
         print('pre-trained weight loaded!')
-    eer, mindcf = evaluate(trainer.model)
-    print(f'eer = {eer:.4f}, mindcf = {mindcf:.4f}')
+        
+    if args.cohorts:
+        produce_cohorts(trainer.model)
+    
+    if args.eval:
+        eer, mindcf = evaluate(trainer.model)
+        print(f'eer = {eer:.4f}, mindcf = {mindcf:.4f}')
     

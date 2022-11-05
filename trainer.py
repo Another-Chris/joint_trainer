@@ -12,49 +12,7 @@ import sys
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
 sys.path.append('..')
-
-scaler = torch.cuda.amp.GradScaler()
-
-
-def get_pair(data):
-    
-    anchor, pos = data['anchor'], data['pos']
-    
-    if len(anchor.shape) > 2:
-        anchor = torch.squeeze(anchor, dim = 1)
-        pos = torch.squeeze(pos, dim = 1)
-    
-    hoplen = 100 * 160 + 240
-    min_hop = 2
-    anchor_len = np.random.randint(min_hop, 4)
-    pos_len = np.random.randint(min_hop, 6 - anchor_len)
-    
-    # anchor_len = 2
-    # pos_len = 2
-
-    anchor_segs = []
-    pos_segs = []
-    for i in range(5):
-        anchor_seg = anchor[:, i*hoplen:(i+1)*hoplen]
-        pos_seg = pos[:, i*hoplen:(i+1)*hoplen]
-        
-        if len(anchor_segs) == anchor_len and len(pos_segs) == pos_len: break
-        
-        if len(anchor_segs) >= anchor_len:
-            pos_segs.append(pos_seg)    
-        else:
-            anchor_segs.append(anchor_seg)
-    
-    anchor = torch.cat(anchor_segs, dim = 1)
-    pos =  torch.cat(pos_segs, dim = 1)
-    
-    if anchor.shape[1] < min_hop * hoplen or pos.shape[1] < min_hop * hoplen:
-        raise ValueError('anchor or pos < min_hop in data loader')
-    
-    return anchor, pos 
-
     
 class Workers(nn.Module):
     def __init__(self, encoder, embed_size) -> None:
@@ -134,9 +92,6 @@ class Trainer(torch.nn.Module):
             self.optim.zero_grad()
             loss.backward()
             self.optim.step()
-            # scaler.scale(loss).backward()
-            # scaler.step(self.optim)
-            # scaler.update()
 
             desc = f""
             for key, val in losses.items():

@@ -20,17 +20,17 @@ torch.cuda.empty_cache()
 MODEL_NAME = "ECAPA_TDNN"
 # MODEL_NAME = "ResNet34"
 
-EXP_NAME = f"{MODEL_NAME}_DSBN_newConcat"
+EXP_NAME = f"{MODEL_NAME}_genreDAT"
 # EXP_NAME = f'{MODEL_NAME}_test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
-TARGET_PATH = './data/cnceleb_wav/data/'
-TARGET_LIST = './data/cnceleb_train_wav.txt'
+TARGET_PATH = './data/cnceleb/data/'
+TARGET_LIST = './data/cnceleb_train_gt5.txt'
 
 # PRE_TRAINED = './save/ECAPA_TDNN_fineTune_aamsoftmax/model-10.model'
-PRE_TRAINED = './pre_trained/ECAPA_TDNN_BN.model'
+PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
 # PRE_TRAINED = './pre_trained/resnet34_DSBN.model'
 # PRE_TRAINED = None 
 

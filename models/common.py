@@ -1,8 +1,9 @@
-import math
 import torch
-import torchaudio
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Function
+
+
 
 """DSBN"""
 class DSBN1d(nn.Module):
@@ -50,10 +51,45 @@ class Head(nn.Module):
         if self.head == 'linear': 
             x = self.l2(x)
         if self.head == 'mlp':
-            x = self.l1(x)
-            x = self.bn(x)
+            x = F.relu(self.bn(self.l1(x)))
             x = self.l2(x)
         return x
+    
+""" discriminator """
+
+class ReverseLayerF(Function):
+
+    @staticmethod
+    def forward(ctx, x, alpha):
+        ctx.alpha = alpha
+
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        output = grad_output.neg() * ctx.alpha
+
+        return output, None
+    
+class Discriminator(nn.Module):
+    def __init__(self, dim_in, feat_dim=128, hidden_size = 256):
+        super().__init__()
+        
+        self.l1 = nn.Linear(dim_in, hidden_size)
+        self.bn1 = nn.BatchNorm1d(hidden_size)
+        
+        self.l2 = nn.Linear(hidden_size, hidden_size)
+        self.bn2 = nn.BatchNorm1d(hidden_size)
+        
+        self.l3 = nn.Linear(hidden_size, feat_dim)
+        
+    def forward(self, x, alpha):
+        x = ReverseLayerF.apply(x, alpha)
+        x = F.relu(self.bn1(self.l1(x)))
+        x = F.relu(self.bn2(self.l2(x)))
+        x = self.l3(x)
+        return x
+    
     
 """other"""
 class PreEmphasis(torch.nn.Module):

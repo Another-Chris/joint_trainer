@@ -1,7 +1,8 @@
-from models.ECAPA_TDNN_WITH_DSBN import ECAPA_TDNN_WITH_DSBN
-from models.ResNet34_DSBN import ResNet34_DSBN 
+from models.ECAPA_TDNN import ECAPA_TDNN
+from models.common import Discriminator
+
 from tqdm import tqdm
-from loss import SupCon, AAMsoftmax, AngleProto
+from loss import SupCon, AAMsoftmax
 from utils import Config
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime as dt
@@ -12,48 +13,51 @@ import sys
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import numpy as np
+
 sys.path.append('..')
     
 class Workers(nn.Module):
-    def __init__(self, encoder, embed_size) -> None:
+    def __init__(self) -> None:
         super().__init__()
 
-        self.encoder = encoder
+        self.encoder = ECAPA_TDNN(C=Config.C, embed_size=Config.EMBED_SIZE)
         self.supcon = SupCon()
-        # self.angleproto = AngleProto()
-        self.aamsoftmax = AAMsoftmax(m = 0.2, s = 30, n_class = Config.NUM_CLASSES, n_embed = embed_size)
+        self.aamsoftmax = AAMsoftmax(m = 0.2, s = 30, n_class = Config.NUM_CLASSES, n_embed = Config.EMBED_SIZE)
+        self.discriminator = Discriminator(dim_in = Config.EMBED_SIZE, feat_dim = 11, hidden_size=512)
     
     def forward(self, x, domain):
         # return F.normalize(self.target_head(F.normalize(self.encoder(x, domain))))
-        return F.normalize(self.encoder(x, domain))
+        return F.normalize(self.encoder(x))
     
     def forward_simCLR(self, f1, f2, label = None):
         feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
         return self.supcon(feat, label)
         
-    def start_train(self, ds_gen):
+    def start_train(self, ds_gen, alpha):
         data, label = next(ds_gen)
         
         """source domain""" 
         # source_data = torch.cat([data['source_data']['anchor'], data['source_data']['pos']], dim = 0)
         source_data = data['source_data']
-        source_feat = self.encoder(source_data.to(Config.DEVICE), 'target')       
+        source_feat = self.encoder(source_data.to(Config.DEVICE))       
         spk_loss = self.aamsoftmax(source_feat, label['source_label'].to(Config.DEVICE))
 
         """target domain"""     
-        # target_data = data['target_data']
-        # spk_feat = self.encoder(target_data.to(Config.DEVICE), domain = 'empty', aug = True)
-        # spk_loss = self.aamsoftmax(spk_feat, label['target_label'].to(Config.DEVICE))
-        
         target_anchor, target_pos = data['target_data']['anchor'],data['target_data']['pos']
-        target_anchor = F.normalize(self.encoder(target_anchor.to(Config.DEVICE), domain = 'target'))
-        target_pos = F.normalize(self.encoder(target_pos.to(Config.DEVICE), domain = 'target'))
-
-        simCLR = self.forward_simCLR(target_anchor,target_pos)
-    
+        f1 = F.normalize(self.encoder(target_anchor.to(Config.DEVICE)))
+        f2 = F.normalize(self.encoder(target_pos.to(Config.DEVICE)))
+        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
+        simCLR = self.supcon(feat)
+        
+        """DANN"""
+        dann_out = self.discriminator(f1, alpha)
+        dann = F.cross_entropy(dann_out, label['target_genre'].to(Config.DEVICE))
+        
         return {
             'spk_loss': spk_loss,
-            'simCLR': simCLR
+            'simCLR': simCLR,
+            'DANN': dann
         }
 
 
@@ -63,17 +67,11 @@ class Trainer(torch.nn.Module):
 
         self.writer = SummaryWriter(
             log_dir=f"./logs/{exp_name}/{dt.now().strftime('%Y-%m-%d %H.%M.%S')}")
-
-        # self.encoder = ResNet34_DSBN(nOut = 512, encoder_type = 'ASP')
-        # self.model = Workers(self.encoder, embed_size=512)
         
-        self.encoder = ECAPA_TDNN_WITH_DSBN(C=Config.C, embed_size=Config.EMBED_SIZE)
-        self.model = Workers(self.encoder, embed_size=Config.EMBED_SIZE)
-        
+        self.model = Workers()
         self.model.to(Config.DEVICE)
 
         self.optim = optim.Adam(self.model.parameters(), lr = Config.LEARNING_RATE)
-        
         self.scheduler = optim.lr_scheduler.StepLR(self.optim, step_size=5, gamma=0.95)
 
     def train_network(self, ds_gen, epoch):
@@ -85,8 +83,11 @@ class Trainer(torch.nn.Module):
         pbar = tqdm(range(steps))
 
         for step in pbar:
+            p = float(step + epoch * steps) / 200 / steps
+            alpha = 2. / (1. + np.exp(-10 * p)) - 1
+            if alpha > 0.5: alpha = 0.5
             
-            losses = self.model.start_train(ds_gen)
+            losses = self.model.start_train(ds_gen, alpha)
             loss = torch.sum(torch.stack(list(losses.values())))
 
             self.optim.zero_grad()

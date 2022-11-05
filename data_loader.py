@@ -1,27 +1,27 @@
 from utils import Config
 from scipy import signal as ss
+from pathlib import PurePath
 
 import os
 import torch
 import glob
 import random
 
-import numpy as np
 import soundfile as sf
-
-
 import numpy as np
+
+
+
+GENRE_MAP = {name: i for i, name in enumerate([
+    'entertainment','interview','singing','live_broadcast','recitation','speech','play','advertisement', 'drama','movie','vlog'
+])}
+
 
 
 """ functions """
-def load_wav(filename, max_frames=None, max_audio=None, evalmode=False, num_eval=10):
+def load_wav(filename, max_frames, evalmode=False, num_eval=10):
 
-    if max_audio is None and max_frames is None:
-        raise ValueError('please specify either max_frames or max_audio')
-
-    if max_audio is None:
-        max_audio = max_frames * 160 + 240
-
+    max_audio = max_frames * 160 + 240
     audio, _ = sf.read(filename)
     audiosize = audio.shape[0]
 
@@ -101,13 +101,7 @@ class AugmentWAV(object):
         self.rir_files = glob.glob(os.path.join(rir_path, '*/*/*.wav'))
 
     # noisecat: noise category: noise, speech, music
-    def additive_noise(self, noisecat, audio, max_audio=None, max_frames=None):        
-        if max_audio is None:
-            if max_frames is None:
-                max_audio = self.max_frames * 160 + 240
-            else:
-                max_audio = max_frames * 160 + 240
-
+    def additive_noise(self, noisecat, audio):        
         clean_db = 10 * np.log10(np.mean(audio ** 2) + 1e-4)
 
         numnoise = self.numnoise[noisecat]
@@ -117,7 +111,7 @@ class AugmentWAV(object):
         noises = []
 
         for noise in noiselist:
-            noiseaudio = load_wav(noise, max_audio=max_audio, evalmode=False)
+            noiseaudio = load_wav(noise,max_frames=self.max_frames,evalmode=False)
             noise_snr = random.uniform(
                 self.noisesnr[noisecat][0], self.noisesnr[noisecat][1])
             noise_db = 10 * np.log10(np.mean(noiseaudio[0] ** 2) + 1e-4)
@@ -126,20 +120,13 @@ class AugmentWAV(object):
 
         return np.sum(np.concatenate(noises, axis=0), axis=0, keepdims=True) + audio
 
-    def reverberate(self, audio, max_frames=None, max_audio=None):
-
-        if max_audio is None:
-            if max_frames is None:
-                max_audio = self.max_frames * 160 + 240
-            else:
-                max_audio = max_frames * 160 + 240
-
+    def reverberate(self, audio):
         rir_file = random.choice(self.rir_files)
         rir, _ = sf.read(rir_file)
         rir = np.expand_dims(rir.astype(np.float), 0)
         rir = rir / np.sqrt(np.sum(rir ** 2))
 
-        return ss.convolve(audio, rir, mode='full')[:, :max_audio]
+        return ss.convolve(audio, rir, mode='full')[:, :self.max_audio]
 
 """ loader """
 class DsLoader(torch.utils.data.Dataset):
@@ -167,23 +154,23 @@ class DsLoader(torch.utils.data.Dataset):
         self.max_frames = max_frames
         self.augment = augment
 
-    def augment_audio(self, audio, max_frames = None, max_audio = None):
+    def augment_audio(self, audio):
 
         randi = np.random.randint(0, 6)
         
         if randi == 0:
             audio = audio
         if randi == 1:
-            audio = self.augment_wav.additive_noise('music', audio, max_frames = max_frames, max_audio = max_audio)
+            audio = self.augment_wav.additive_noise('music', audio)
         if randi == 2:
-            audio = self.augment_wav.additive_noise('speech', audio, max_frames = max_frames, max_audio = max_audio)
+            audio = self.augment_wav.additive_noise('speech', audio)
         if randi == 3:
-            audio = self.augment_wav.additive_noise('noise', audio, max_frames = max_frames, max_audio = max_audio)
+            audio = self.augment_wav.additive_noise('noise', audio)
         if randi == 4:
-            audio = self.augment_wav.reverberate(audio, max_frames = max_frames, max_audio = max_audio)
+            audio = self.augment_wav.reverberate(audio)
         if randi == 5:
-            audio = self.augment_wav.additive_noise('speech', audio, max_frames = max_frames, max_audio = max_audio)
-            audio = self.augment_wav.additive_noise('music', audio, max_frames = max_frames, max_audio = max_audio)
+            audio = self.augment_wav.additive_noise('speech', audio)
+            audio = self.augment_wav.additive_noise('music', audio)
 
         return audio
 
@@ -209,24 +196,13 @@ class DsLoader(torch.utils.data.Dataset):
         tidx = np.random.randint(0, len(self.target_data))
         target_data, target_label = self.get_tuple(tidx, self.target_data, self.target_label, eval_mode=False)
         
+        path = PurePath(self.target_data[tidx])
+        genre = path.name.split('-')[0]
+        
         ## one segment
         source_data = torch.FloatTensor(
             self.augment_audio(load_wav(self.source_data[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
         source_label = self.source_label[idx]
-        
-        # tidx = np.random.randint(0, len(self.target_data))
-        # target_data = torch.FloatTensor(
-        #     self.augment_audio(load_wav(self.target_data[tidx], self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
-        # target_label = self.target_label[tidx]
-        
-        # tidx = np.random.randint(0, len(self.target_data))
-        # max_audio = 5 * (100 * 160 + 240)
-        # target_audio = load_wav(self.target_data[tidx], max_audio = max_audio)
-        # target_data = {
-        #     'anchor': torch.FloatTensor(self.augment_audio(target_audio, max_audio=max_audio)),
-        #     'pos': torch.FloatTensor(self.augment_audio(target_audio, max_audio=max_audio))
-        # }
-        # target_label = self.target_label[tidx]
 
         return {
             'source_data': source_data,
@@ -234,6 +210,7 @@ class DsLoader(torch.utils.data.Dataset):
         }, {
             'source_label': source_label,
             'target_label': target_label,
+            'target_genre': GENRE_MAP[genre]
         }
 
 class test_dataset_loader(torch.utils.data.Dataset):

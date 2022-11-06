@@ -197,29 +197,32 @@ class DsLoader(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         eval_mode = False
         num_eval = 5
+        data = {}
+        label = {}
         
         ## two segments
         # source_data, source_label = self.get_tuple(idx, self.source_data, self.source_label, eval_mode=False)
-        tidx = np.random.randint(0, len(self.target_data))
-        target_data, target_label = self.get_tuple(tidx, self.target_data, self.target_label, eval_mode=False)
-        
-        path = PurePath(self.target_data[tidx])
-        genre = path.name.split('-')[0]
-        
+        # tidx = np.random.randint(0, len(self.target_data))
+        # target_data, target_label = self.get_tuple(tidx, self.target_data, self.target_label, eval_mode=False)
+
         ## one segment
         source_data = torch.FloatTensor(
             self.augment_audio(load_wav(self.source_data[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
         source_label = self.source_label[idx]
-
-
-        return {
-            'source_data': source_data,
-            'target_data': target_data,
-        }, {
-            'source_label': source_label,
-            'target_label': target_label,
-            'target_genre': GENRE_MAP[genre]
-        }
+        
+        tidx = np.random.randint(0, len(self.target_data))
+        target_data = torch.FloatTensor(
+            self.augment_audio(load_wav(self.target_data[tidx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
+        target_label = self.target_label[tidx]
+        
+        data['source_data'] = source_data
+        data['target_data'] = target_data
+        label['source_label'] = source_label
+        label['target_label'] = target_label
+        # path = PurePath(self.target_data[tidx])
+        # genre = path.name.split('-')[0]
+        # label['target_genre'] = genre
+        return data, label
 
 class test_dataset_loader(torch.utils.data.Dataset):
     def __init__(self, test_list, test_path, eval_frames, num_eval):

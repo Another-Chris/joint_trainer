@@ -24,40 +24,51 @@ class Workers(nn.Module):
         self.encoder = ECAPA_TDNN(C=Config.C, embed_size=Config.EMBED_SIZE)
         self.supcon = SupCon()
         self.aamsoftmax = AAMsoftmax(m = 0.2, s = 30, n_class = Config.NUM_CLASSES, n_embed = Config.EMBED_SIZE)
-        self.discriminator = Discriminator(dim_in = Config.EMBED_SIZE, feat_dim = 2, hidden_size=512)
+        self.discriminator = Discriminator(dim_in = Config.EMBED_SIZE, feat_dim = 1, hidden_size=512)
     
     def forward(self, x, domain):
         return F.normalize(self.encoder(x))
-    
-    def forward_simCLR(self, f1, f2, label = None):
-        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
-        return self.supcon(feat, label)
         
     def start_train(self, ds_gen, alpha):
         data, label = next(ds_gen)
+        losses = {}
         
         """source domain""" 
-        # source_data = torch.cat([data['source_data']['anchor'], data['source_data']['pos']], dim = 0)
+        # source_anchor, source_pos = data['source_data']['anchor'],data['source_data']['pos']
+        # source_f1 = self.encoder(source_anchor.to(Config.DEVICE))
+        # source_f2 = self.encoder(source_pos.to(Config.DEVICE))
+        # spk_loss = self.aamsoftmax(source_f1, label['source_label'].to(Config.DEVICE))
+        
         source_data = data['source_data']
-        source_feat = self.encoder(source_data.to(Config.DEVICE))       
+        source_feat = self.encoder(source_data.to(Config.DEVICE), aug = True)
         spk_loss = self.aamsoftmax(source_feat, label['source_label'].to(Config.DEVICE))
+        losses['spk_loss'] = spk_loss
 
         """target domain"""     
-        target_anchor, target_pos = data['target_data']['anchor'],data['target_data']['pos']
-        f1 = F.normalize(self.encoder(target_anchor.to(Config.DEVICE)))
-        f2 = F.normalize(self.encoder(target_pos.to(Config.DEVICE)))
-        feat = torch.cat([f1.unsqueeze(1), f2.unsqueeze(1)], dim = 1)
-        simCLR = self.supcon(feat)
+        # target_anchor, target_pos = data['target_data']['anchor'],data['target_data']['pos']
+        # target_f1 = self.encoder(target_anchor.to(Config.DEVICE))
+        # target_f2 = self.encoder(target_pos.to(Config.DEVICE))
+        
+        # target_feat = torch.cat([F.normalize(target_f1).unsqueeze(1), F.normalize(target_f2).unsqueeze(1)], dim = 1)
+        # source_feat = torch.cat([F.normalize(source_f1).unsqueeze(1), F.normalize(source_f2).unsqueeze(1)], dim = 1)
+        # # feat = torch.cat([source_feat, target_feat], dim = 0)
+        # simCLR = (self.supcon(source_feat) + self.supcon(target_feat)) / 2
+        # losses['simCLR'] = simCLR
+        
+        target_data = data['target_data']
+        target_feat = self.encoder(target_data.to(Config.DEVICE), aug = True)
         
         """DANN"""
-        # dann_out = self.discriminator(f1, alpha)
         # dann = F.cross_entropy(dann_out, label['target_genre'].to(Config.DEVICE))
         
-        return {
-            'spk_loss': spk_loss,
-            'simCLR': simCLR,
-            'DANN': dann
-        }
+        bz = source_feat.shape[0]
+        dann_feat = F.normalize(torch.cat([source_feat, target_feat]))
+        dann_out = self.discriminator(dann_feat, alpha)
+        labels = torch.cat([torch.zeros(bz,1), torch.ones(bz,1)]).to(Config.DEVICE)
+        dann = F.binary_cross_entropy_with_logits(dann_out, labels)
+        losses['language_DAT'] = dann
+        
+        return losses
 
 
 class Trainer(torch.nn.Module):
@@ -83,8 +94,7 @@ class Trainer(torch.nn.Module):
 
         for step in pbar:
             p = float(step + epoch * steps) / 200 / steps
-            alpha = 2. / (1. + np.exp(-10 * p)) - 1
-            if alpha > 0.3: alpha = 0.3
+            alpha = min(2. / (1. + np.exp(-10 * p)) - 1, 0.6)
             
             losses = self.model.start_train(ds_gen, alpha)
             loss = torch.sum(torch.stack(list(losses.values())))

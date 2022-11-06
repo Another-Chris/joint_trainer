@@ -22,10 +22,10 @@ class Config():
     NUM_WORKERS = 6
     BATCH_SIZE = 150
     NUM_CLASSES = 5994
-    MAX_FRAMES = 400 # will be split into half
+    MAX_FRAMES = 200 # will be split into half
     EVAL_FRAMES = 400
     NUM_EVAL = 10
-    LEARNING_RATE = 1e-4
+    LEARNING_RATE = 2e-4
     EMBED_SIZE = 192
     C = 1024
     MUSAN_PATH = "./data/musan_split"

@@ -20,7 +20,7 @@ torch.cuda.empty_cache()
 MODEL_NAME = "ECAPA_TDNN"
 
 EXP_NAME = f"{MODEL_NAME}_stage1_lanDAT"
-EXP_NAME = f'{MODEL_NAME}_test'
+# EXP_NAME = f'{MODEL_NAME}_test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'

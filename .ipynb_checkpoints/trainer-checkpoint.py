@@ -24,7 +24,7 @@ class Workers(nn.Module):
         self.encoder = ECAPA_TDNN(C=Config.C, embed_size=Config.EMBED_SIZE)
         self.supcon = SupCon()
         self.aamsoftmax = AAMsoftmax(m = 0.2, s = 30, n_class = Config.NUM_CLASSES, n_embed = Config.EMBED_SIZE)
-        self.discriminator = Discriminator(dim_in = Config.EMBED_SIZE, feat_dim = 1, hidden_size=512)
+        self.discriminator = Discriminator(dim_in = Config.EMBED_SIZE, feat_dim = 1, hidden_size=1024)
     
     def forward(self, x, domain):
         return F.normalize(self.encoder(x))
@@ -40,7 +40,7 @@ class Workers(nn.Module):
         # spk_loss = self.aamsoftmax(source_f1, label['source_label'].to(Config.DEVICE))
         
         source_data = data['source_data']
-        source_feat = self.encoder(source_data.to(Config.DEVICE), aug = True)
+        source_feat = self.encoder(source_data.to(Config.DEVICE))
         spk_loss = self.aamsoftmax(source_feat, label['source_label'].to(Config.DEVICE))
         losses['spk_loss'] = spk_loss
 
@@ -56,7 +56,7 @@ class Workers(nn.Module):
         # losses['simCLR'] = simCLR
         
         target_data = data['target_data']
-        target_feat = self.encoder(target_data.to(Config.DEVICE), aug = True)
+        target_feat = self.encoder(target_data.to(Config.DEVICE))
         
         """DANN"""
         # dann = F.cross_entropy(dann_out, label['target_genre'].to(Config.DEVICE))
@@ -94,7 +94,7 @@ class Trainer(torch.nn.Module):
 
         for step in pbar:
             p = float(step + epoch * steps) / 200 / steps
-            alpha = min(2. / (1. + np.exp(-10 * p)) - 1, 0.6)
+            alpha = min(2. / (1. + np.exp(-10 * p)) - 1, 0.5)
             
             losses = self.model.start_train(ds_gen, alpha)
             loss = torch.sum(torch.stack(list(losses.values())))

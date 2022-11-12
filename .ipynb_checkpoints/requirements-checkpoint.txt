@@ -1,7 +1,11 @@
-asteroid_filterbank
 numpy
 scipy
 scikit-learn
 tqdm
 pyyaml
 soundfile
+librosa
+tensorboard
+matplotlib
+seaborn
+pandas

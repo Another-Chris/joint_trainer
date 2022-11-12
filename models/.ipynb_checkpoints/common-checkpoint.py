@@ -89,10 +89,17 @@ class Discriminator(nn.Module):
         x = ReverseLayerF.apply(x, alpha)
         x = F.relu(self.bn1(self.l1(x)))
         x = F.relu(self.bn2(self.l2(x)))
-        # x = F.relu(self.dp1(self.l1(x)))
-        # x = F.relu(self.dp2(self.l2(x)))
-        x = self.l3(x)
-        return x
+        # x = self.dp1(F.relu((self.l1(x))))
+        # x = self.dp2(F.relu((self.l2(x))))
+        return self.l3(x)
+        
+#     def forward(self, x, alpha):
+#         x = ReverseLayerF.apply(x, alpha)
+        
+#         bz = x.shape[0] // 2
+#         x_source = self.one_branch(x[:bz], 'source')
+#         x_target = self.one_branch(x[bz:], 'target')
+#         return torch.cat([x_source, x_target])
     
     
 """other"""

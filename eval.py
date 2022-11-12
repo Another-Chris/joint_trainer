@@ -26,7 +26,7 @@ sys.path.append("..")
 TEST_LIST = Config.TEST_LIST
 TEST_PATH = Config.TEST_PATH
 MODEL_NAME = 'ECAPA_TDNN'
-PRE_TRAINED = './save/ECAPA_TDNN_genreDAT/model-10.model'
+PRE_TRAINED = './save/ECAPA_TDNN_test/2022-11-07 04.24.51/model-10.model'
 # PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
 NUM_WORKERS = 1
 
@@ -239,8 +239,8 @@ def evaluateFromList(encoder, test_list, test_path, num_eval=10, cohorts_path = 
         all_labels.append(int(data[0]))
         all_trails.append(data[1] + " " + data[2])
         
-    df = pd.DataFrame({'all_scores': all_scores, 'all_labels': all_labels, 'all_trails': all_trails})
-    df.to_csv(f'./scores.csv', index = False)
+    # df = pd.DataFrame({'all_scores': all_scores, 'all_labels': all_labels, 'all_trails': all_trails})
+    # df.to_csv(f'./scores.csv', index = False)
     
     return (all_scores, all_labels, all_trails)
 

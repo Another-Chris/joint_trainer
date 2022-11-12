@@ -179,18 +179,18 @@ class DsLoader(torch.utils.data.Dataset):
     
 
     def get_tuple(self, idx, data_list, label_list, eval_mode, num_eval=Config.GIM_SEGS):
-        # anchor = self.augment_audio(load_wav(data_list[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval))
-        # pos = self.augment_audio(load_wav(data_list[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval))
-        # anchor = torch.FloatTensor(anchor)
-        # pos = torch.FloatTensor(pos)
+        anchor = self.augment_audio(load_wav(data_list[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval))
+        pos = self.augment_audio(load_wav(data_list[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval))
+        anchor = torch.FloatTensor(anchor)
+        pos = torch.FloatTensor(pos)
         
-        utt = load_wav(data_list[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval)
-        aug1 = self.augment_audio(utt)
-        aug2 = self.augment_audio(utt)
+#         utt = load_wav(data_list[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval)
+#         aug1 = self.augment_audio(utt)
+#         aug2 = self.augment_audio(utt)
         
-        middle = aug1.shape[1] // 2
-        anchor = torch.FloatTensor(aug1[:, :middle])
-        pos = torch.FloatTensor(aug2[:, middle:])
+#         middle = aug1.shape[1] // 2
+#         anchor = torch.FloatTensor(aug1[:, :middle])
+#         pos = torch.FloatTensor(aug2[:, middle:])
         
         return {'anchor': anchor, 'pos': pos}, label_list[idx]
     
@@ -202,26 +202,26 @@ class DsLoader(torch.utils.data.Dataset):
         
         ## two segments
         # source_data, source_label = self.get_tuple(idx, self.source_data, self.source_label, eval_mode=False)
-        # tidx = np.random.randint(0, len(self.target_data))
-        # target_data, target_label = self.get_tuple(tidx, self.target_data, self.target_label, eval_mode=False)
+        tidx = np.random.randint(0, len(self.target_data))
+        target_data, target_label = self.get_tuple(tidx, self.target_data, self.target_label, eval_mode=False)
 
         ## one segment
         source_data = torch.FloatTensor(
-            self.augment_audio(load_wav(self.source_data[idx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
+            self.augment_audio(load_wav(self.source_data[idx], max_frames = self.max_frames, evalmode=False)))
         source_label = self.source_label[idx]
         
-        tidx = np.random.randint(0, len(self.target_data))
-        target_data = torch.FloatTensor(
-            self.augment_audio(load_wav(self.target_data[tidx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
-        target_label = self.target_label[tidx]
+        # tidx = np.random.randint(0, len(self.target_data))
+        # target_data = torch.FloatTensor(
+        #     self.augment_audio(load_wav(self.target_data[tidx], max_frames = self.max_frames, evalmode=eval_mode, num_eval=num_eval)))
+        # target_label = self.target_label[tidx]
         
         data['source_data'] = source_data
         data['target_data'] = target_data
         label['source_label'] = source_label
         label['target_label'] = target_label
-        # path = PurePath(self.target_data[tidx])
-        # genre = path.name.split('-')[0]
-        # label['target_genre'] = genre
+        path = PurePath(self.target_data[tidx])
+        genre = path.name.split('-')[0]
+        label['target_genre'] = torch.tensor(GENRE_MAP[genre])
         return data, label
 
 class test_dataset_loader(torch.utils.data.Dataset):

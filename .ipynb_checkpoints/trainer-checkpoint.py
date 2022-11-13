@@ -96,7 +96,7 @@ class Trainer(torch.nn.Module):
 
         for step in pbar:
             # p = float(step + epoch * steps) / 200 / steps
-            # alpha = min(0 + 2. / (1. + np.exp(-10 * p)) - 1, 0.5)
+            # alpha = min(0 + 2. / (1. + np.exp(-10 * p)) - 1, 0.6)
             alpha = 0.6
             
             losses = self.model.start_train(ds_gen, alpha)

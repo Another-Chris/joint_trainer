@@ -50,13 +50,16 @@ if __name__ == "__main__":
         shuffle=True,
         num_workers=Config.NUM_WORKERS,
         drop_last=True,
-    )
+    ) 
 
     ds_gen = inf_train_gen(loader)
     trainer = Trainer(exp_name=EXP_NAME)
 
     if PRE_TRAINED is not None:        
         trainer.model.encoder.load_state_dict(torch.load(PRE_TRAINED))
+        # if trainer.model.aamsoftmax:
+        #     state_dict = torch.load('./pre_trained/aamsoftmax.model')
+        #     trainer.model.aamsoftmax.load_state_dict(state_dict)
         print('pre-trained weight loaded!')
 
     # core training script

@@ -20,7 +20,7 @@ class Config():
     MAX_EPOCH = 300
     TEST_INTERVAL = 10
     NUM_WORKERS = 6
-    BATCH_SIZE = 128
+    BATCH_SIZE = 200
     NUM_CLASSES = 5994
     MAX_FRAMES = 200 # will be split into half
     EVAL_FRAMES = 400
@@ -62,13 +62,13 @@ def save_scripts(result_save_path, configs):
     # save training code and params
     pyfiles = glob.glob('./*.py') + glob.glob('./*/*.py')
     strtime = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-
+ 
     zipf = zipfile.ZipFile(
         f'{result_save_path}/run{strtime}.zip',
         'w',
         zipfile.ZIP_DEFLATED)
 
-    for file in pyfiles:
+    for file in pyfiles: 
         zipf.write(file)
     zipf.close()
 

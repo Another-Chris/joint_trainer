@@ -20,13 +20,13 @@ class Config():
     MAX_EPOCH = 300
     TEST_INTERVAL = 10
     NUM_WORKERS = 6
-    BATCH_SIZE = 200
+    BATCH_SIZE = 128
     NUM_CLASSES = 5994
     MAX_FRAMES = 200 # will be split into half
     EVAL_FRAMES = 400
     NUM_EVAL = 10
     LEARNING_RATE = 5e-5
-    EMBED_SIZE = 192
+    EMBED_SIZE = 512
     C = 1024
     MUSAN_PATH = "./data/musan_split"
     RIR_PATH = "./data/RIRS_NOISES/simulated_rirs"    

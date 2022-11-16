@@ -1,5 +1,6 @@
 from models.ECAPA_TDNN import ECAPA_TDNN
 from models.ECAPA_TDNN_WITH_DSBN import ECAPA_TDNN_WITH_DSBN 
+from models.ResNet34 import ResNet34
 from models.common import Discriminator
 
 from tqdm import tqdm
@@ -22,10 +23,11 @@ class Workers(nn.Module):
     def __init__(self) -> None:
         super().__init__()
 
-        self.encoder = ECAPA_TDNN(C=Config.C, embed_size=Config.EMBED_SIZE)
+        self.encoder = ResNet34(nOut=Config.EMBED_SIZE, encoder_type = "ASP")
         self.supcon = SupCon()
         self.aamsoftmax = AAMsoftmax(m = 0.2, s = 30, n_class = Config.NUM_CLASSES, n_embed = Config.EMBED_SIZE)
-        self.discriminator = Discriminator(dim_in = Config.EMBED_SIZE, feat_dim = 11, hidden_size=512)
+        self.discriminator = Discriminator(dim_in = Config.EMBED_SIZE, feat_dim = 512, hidden_size=512)
+        self.aam_dis = AAMsoftmax(m = 0.2, s = 30, n_class = 11, n_embed = Config.EMBED_SIZE)
     
     def forward(self, x, domain):
         return F.normalize(self.encoder(x))
@@ -33,6 +35,7 @@ class Workers(nn.Module):
     def start_train(self, ds_gen, alpha):
         data, label = next(ds_gen)
         losses = {}
+        bz_source = 64
         
         """source domain""" 
         # source_anchor, source_pos = data['source_data']['anchor'],data['source_data']['pos']
@@ -41,32 +44,36 @@ class Workers(nn.Module):
         # source_feat = torch.cat([F.normalize(source_f1).unsqueeze(1), F.normalize(source_f2).unsqueeze(1)], dim = 1)
         # spk_loss = self.supcon(source_feat, label['source_label'].to(Config.DEVICE))
 
-        source_data = data['source_data']
-        source_feat = self.encoder(source_data.to(Config.DEVICE), aug = True)
-        spk_loss = self.aamsoftmax(source_feat, label['source_label'].to(Config.DEVICE))
+        source_data = data['source_data'][:bz_source]
+        source_feat = self.encoder(source_data.to(Config.DEVICE))
+        spk_loss = self.aamsoftmax(source_feat, label['source_label'][:bz_source].to(Config.DEVICE))
         losses['spk_loss'] = spk_loss
 
         """target domain"""     
         target_anchor, target_pos = data['target_data']['anchor'],data['target_data']['pos']
-        target_f1 = self.encoder(target_anchor.to(Config.DEVICE), aug = True)
-        target_f2 = self.encoder(target_pos.to(Config.DEVICE), aug = True)
+        target_f1 = self.encoder(target_anchor.to(Config.DEVICE))
+        target_f2 = self.encoder(target_pos.to(Config.DEVICE))
         target_feat = torch.cat([F.normalize(target_f1).unsqueeze(1), F.normalize(target_f2).unsqueeze(1)], dim = 1)
         simCLR = self.supcon(target_feat)
         losses['simCLR'] = simCLR
+
+        # target_data = data['target_data']
+        # target_feat = self.encoder(target_data.to(Config.DEVICE), aug = True)
 
         """DANN"""
         # dann_feat = self.discriminator(F.normalize(torch.cat([target_f1, target_f2])), alpha)
         # labels = torch.cat([label['target_genre'],label['target_genre']])
         # dann = F.cross_entropy(dann_feat, labels.to(Config.DEVICE))
         
-        dann_feat = self.discriminator(F.normalize(target_f1), alpha)
-        dann = F.cross_entropy(dann_feat, label['target_genre'].to(Config.DEVICE))
+        dann_feat = self.discriminator(F.normalize(target_f1[:bz_source]), alpha)
+        dann = self.aam_dis(dann_feat, label['target_genre'][:bz_source].to(Config.DEVICE))
         
-        # dann_feat = torch.cat([source_feat, target_f1])
-        # dann_out = self.discriminator(dann_feat, alpha)
+        # dann_source = self.discriminator(source_feat, alpha)
+        # dann_target = self.discriminator(target_feat, alpha)
+        # dann_feat = torch.cat([dann_source, dann_target])
         # bz = dann_feat.shape[0] // 2
         # labels = torch.cat([torch.zeros(bz,1), torch.ones(bz,1)]).to(Config.DEVICE)
-        # dann = F.binary_cross_entropy_with_logits(dann_out, labels)
+        # dann = F.binary_cross_entropy_with_logits(dann_feat, labels)
         
         losses['dann'] = dann
         
@@ -84,7 +91,7 @@ class Trainer(torch.nn.Module):
         self.model.to(Config.DEVICE)
 
         self.optim = optim.Adam(self.model.parameters(), lr = Config.LEARNING_RATE)
-        self.scheduler = optim.lr_scheduler.StepLR(self.optim, step_size=10, gamma=0.95)
+        self.scheduler = optim.lr_scheduler.StepLR(self.optim, step_size=5, gamma=0.95)
 
     def train_network(self, ds_gen, epoch):
 
@@ -95,7 +102,7 @@ class Trainer(torch.nn.Module):
         pbar = tqdm(range(steps))
 
         for step in pbar:
-            # p = float(step + epoch * steps) / 200 / steps
+            p = float(step + epoch * steps) / 200 / steps
             # alpha = min(0 + 2. / (1. + np.exp(-10 * p)) - 1, 0.6)
             alpha = 0.6
             

@@ -17,16 +17,17 @@ random.seed(0)
 
 torch.cuda.empty_cache()
 
-MODEL_NAME = "ECAPA_TDNN"
+MODEL_NAME = "ResNet34"
 
-EXP_NAME = f"{MODEL_NAME}_stage1_genreDAT"
+EXP_NAME = f"{MODEL_NAME}_genreDANN"
 # EXP_NAME = f'{MODEL_NAME}_test'
 MODEL_SAVE_PATH = f"./save/{EXP_NAME}"
 SOURCE_LIST = './data/voxceleb_train.txt'
 SOURCE_PATH = './data/voxceleb2/'
 TARGET_PATH = './data/cnceleb/data/'
 TARGET_LIST = './data/cnceleb_train.txt'
-PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
+# PRE_TRAINED = './pre_trained/ECAPA_TDNN.model'
+PRE_TRAINED = './pre_trained/ResNetSE34LV2.model'
 # PRE_TRAINED = None 
 
 MODEL_SAVE_PATH = f"{MODEL_SAVE_PATH}/{dt.now().strftime('%Y-%m-%d %H.%M.%S')}"
@@ -56,7 +57,8 @@ if __name__ == "__main__":
     trainer = Trainer(exp_name=EXP_NAME)
 
     if PRE_TRAINED is not None:        
-        trainer.model.encoder.load_state_dict(torch.load(PRE_TRAINED))
+        trainer.model.encoder.load_state_dict(torch.load(PRE_TRAINED), strict = False)
+        # trainer.model.load_state_dict(torch.load(PRE_TRAINED))
         # if trainer.model.aamsoftmax:
         #     state_dict = torch.load('./pre_trained/aamsoftmax.model')
         #     trainer.model.aamsoftmax.load_state_dict(state_dict)
@@ -78,7 +80,7 @@ if __name__ == "__main__":
 
         print(desc)
         
-        torch.save(trainer.model.state_dict(),
+        torch.save(trainer.model.encoder.state_dict(),
                    f'{MODEL_SAVE_PATH}/model-{it}.model')
 
         if lr > 1e-7:

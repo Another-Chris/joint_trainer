@@ -26,8 +26,7 @@ class Workers(nn.Module):
         self.encoder = ResNet34(nOut=Config.EMBED_SIZE, encoder_type = "ASP")
         self.supcon = SupCon()
         self.aamsoftmax = AAMsoftmax(m = 0.2, s = 30, n_class = Config.NUM_CLASSES, n_embed = Config.EMBED_SIZE)
-        self.discriminator = Discriminator(dim_in = Config.EMBED_SIZE, feat_dim = 512, hidden_size=512)
-        self.aam_dis = AAMsoftmax(m = 0.2, s = 30, n_class = 11, n_embed = Config.EMBED_SIZE)
+        self.discriminator = Discriminator(dim_in = Config.EMBED_SIZE, feat_dim = 11, hidden_size=512)
     
     def forward(self, x, domain):
         return F.normalize(self.encoder(x))
@@ -66,7 +65,7 @@ class Workers(nn.Module):
         # dann = F.cross_entropy(dann_feat, labels.to(Config.DEVICE))
         
         dann_feat = self.discriminator(F.normalize(target_f1[:bz_source]), alpha)
-        dann = self.aam_dis(dann_feat, label['target_genre'][:bz_source].to(Config.DEVICE))
+        dann = F.cross_entropy(dann_feat, label['target_genre'][:bz_source].to(Config.DEVICE))
         
         # dann_source = self.discriminator(source_feat, alpha)
         # dann_target = self.discriminator(target_feat, alpha)
